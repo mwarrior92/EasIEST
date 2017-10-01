@@ -1,19 +1,18 @@
 import inspect
 import os
 import shutil
-import logging
 import logging.config
 
-'''
+"""
 NOTE: most of the helper functions are just to make main code less cluttered
-'''
+"""
 
 ##############################################################
 #                       PATH SETUP
 ##############################################################
 
 self_file = os.path.abspath(inspect.stack()[0][1]) # source [1]
-top_dir = "/".join(self_file.split("/")[:-2])+"/"
+top_dir = "/".join(self_file.split("/")[:-1])+"/"
 print top_dir
 
 ##############################################################
@@ -22,7 +21,7 @@ print top_dir
 
 # load logger config file and create logger
 logging.config.fileConfig(top_dir+'logging.conf',
-        disable_existing_loggeres=False)
+        disable_existing_loggers=False)
 logger = logging.getLogger(__name__)
 
 ##############################################################
@@ -30,13 +29,12 @@ logger = logging.getLogger(__name__)
 ##############################################################
 
 def overwrite(path, content):
-    '''
+    """
     :param path: (str) path to file to be written to (including file name)
     :param content: (str) data to be written to file
 
     this is a simple wrapper to reduce 'w+' writes into clean one-liners
-    '''
-
+    """
     try:
         f = open(path, 'w+')
         try:
@@ -50,12 +48,12 @@ def overwrite(path, content):
 
 
 def append_file(path, content):
-    '''
+    """
     :param path: (str) path to file to be written to (including file name)
     :param content: (str) data to be written to file
 
     this is a simple wrapper to reduce 'a+' writes into clean one-liners
-    '''
+    """
 
     try:
         f = open(path, 'a+')
@@ -70,7 +68,7 @@ def append_file(path, content):
 
 
 def format_dirpath(path):
-    '''
+    """
     :param path: (str) a path to a dir in a filesystem; assumes path uses '/' as
     dir delimitter
     :return: (str) a properly formatted, absolute path string
@@ -82,7 +80,7 @@ def format_dirpath(path):
     NOTE: this will build an ABSOLUTE path, CREATING any non-existant
     directories along the way as needed. ONLY use this when you KNOW the path is
     EXACTLY what you want/need it to be.
-    '''
+    """
     dirs = path.split('/')
     path = '/'
     if dirs[0] != "":
@@ -98,7 +96,6 @@ def format_dirpath(path):
         try:
             if not os.path.exists(path):
                 os.makedirs(path)
-                fix_ownership(path)
         except OSError:
             logger.error('OSError creating file path for '+path)
     logger.debug("corrected path: "+path)
@@ -106,14 +103,14 @@ def format_dirpath(path):
 
 
 def listfiles(parentdir, prefix="", containing="", suffix=""):
-    '''
+    """
     :param parentdir: (str) the directory from which you would like the files listed
     :param prefix: (str) leading characters to match in returned file names
     :param containing: (str) substring to match in returned file names
     :param suffix: (str) trailing characters to match in returned file names
     :return: (list(str)) list of file names from parentdir that meet the param
     constraints
-    '''
+    """
     # return list of file names in parentdir;
     # setting fullpath to True will give filenames with the direct/full path as
     # a prefix
@@ -121,18 +118,19 @@ def listfiles(parentdir, prefix="", containing="", suffix=""):
         outlist = list()
         for f in files:
             if f.startswith(prefix) and containing in f and f.endswith(suffix):
-                continue
-            else:
                 outlist.append(f)
         return outlist
 
 
 def remove(fname):
-    '''
+    """
     :param fname: (str) the name of the file to be removed
 
     removes (deletes) the file, 'fname'
-    '''
+
+    NOTE: also accepts directories and wildcards
+    NOTE: directories must end in '/'
+    """
     try:
         if fname[-1] == '*' or fname[-1] == '/':
             shutil.rmtree(fname)
