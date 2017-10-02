@@ -1,12 +1,43 @@
 class MeasurementDescription:
     """base container class for measurement descriptions"""
-    def __init__(self):
+    def __init__(self, **kwargs):
+        """
+        :param label: (str) a brief label to describe what this particular measurement is at a glance
+        """
         self.measurement_type = None
         self.duration = None
         self.repetitions = None
         self.repetition_gap = None
+        self.label = kwargs.pop('label')
 
-    def set_type(self, mtype):
+        for k in kwargs:
+            setattr(self, k, kwargs[k])
+
+    def __repr__(self):
+        if len(self.label.split()) > 1:
+            # force label into camelcase for concise printing (if there are spaces)
+            return "mdo(" + "".join(self.label.title().split()) + ")"
+        else:
+            return "mdo("+self.label+")"
+
+    def __str__(self):
+        # we want to print the label first
+        outstr = "*****************************"+"LABEL: " + self.label + "\n"
+        outstr += "-----------------------------\n"
+        keys = sorted([z for z in vars(self).keys() if z != 'label'])
+        for k in keys:
+            outstr += k.upper() + ": " + vars(self)[k] + "\n"
+        return outstr
+
+    @staticmethod
+    def list_all_members():
+        return ["measurement_type", "duration", "repetitions", "repetition_gap", "label"]
+
+    @staticmethod
+    def list_required_members():
+        return ["label"]
+
+    def set_measurement_type(self, mtype):
         """
         set the measurement type
         :param mtype: (str) ping, download, dns, http, https, etc...
