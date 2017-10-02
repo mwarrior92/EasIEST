@@ -29,8 +29,11 @@ class MeasurementDescription:
             outstr += k.upper() + ": " + vars(self)[k] + "\n"
         return outstr
 
+    def get_label(self):
+        return self.label
+
     @staticmethod
-    def list_all_members():
+    def list_init_members():
         return ["measurement_type", "duration", "repetitions", "repetition_gap", "label"]
 
     @staticmethod
