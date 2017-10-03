@@ -115,8 +115,3 @@ class MDOSequence:
             return getattr(self, "get_"+member)()
         else:
             return vars(self)[member]
-
-
-class Experiment:
-    def __init__(self):
-        self.sequences = list()

@@ -20,7 +20,7 @@ class Location:
         pass
 
     def set_coordinates(self, latitude, longitude):
-        pass
+        self.coordinates = (latitude, longitude)
 
     def get_ipv4_subnet(self, mask):
         pass
@@ -43,6 +43,15 @@ class Client:
     def __init__(self):
         self.platform = None
         self.location = None
+
+
+class TargetClientGroup:
+    def __init__(self, location=None, quantity=None, platform=None, **kwargs):
+        self.location = location
+        self.quantity = quantity
+        self.platform = platform
+        for k in kwargs:
+            setattr(self, k, kwargs[k])
 
 
 class ClientGroup:
