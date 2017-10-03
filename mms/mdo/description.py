@@ -22,7 +22,7 @@ class MeasurementDescription:
 
     def __str__(self):
         # we want to print the label first
-        outstr = "*****************************"+"LABEL: " + self.label + "\n"
+        outstr = "*****************************\n"+"LABEL: " + self.label + "\n"
         outstr += "-----------------------------\n"
         keys = sorted([z for z in vars(self).keys() if z != 'label'])
         for k in keys:
@@ -40,33 +40,12 @@ class MeasurementDescription:
     def list_required_members():
         return ["label"]
 
-    def set_measurement_type(self, mtype):
+    def get(self, member):
         """
-        set the measurement type
-        :param mtype: (str) ping, download, dns, http, https, etc...
+        :param member: (str) name of member whose value should be returned
+        :return:
         """
-        self.measurement_type = mtype
-
-    def set_duration(self, dur):
-        """
-        set the duration
-        :param dur: (float) the amount of time you want the measurement to last
-        """
-
-        self.duration = dur
-
-    def set_repetitions(self, reps):
-        """
-        set the number of times the measurement will repeat back-to-back
-        :param reps: (int) # repetitions
-        """
-
-        self.repetitions = reps
-
-    def set_repetition_gap(self, gap):
-        """
-        set the amount of time (in seconds) between each repetition of the measurement
-        :param gap: (float) gap (in seconds) between back-to-back repetitions
-        """
-
-        self.repetition_gap = gap
+        if hasattr(self, "get_"+member):
+            return getattr(self, "get_"+member)()
+        else:
+            return vars(self)[member]
