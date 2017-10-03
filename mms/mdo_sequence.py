@@ -47,7 +47,20 @@ class MDOSequence:
         self.label = str(label)
         self.mdo_list = mdo_list
         self.index = 0
+        for p in primer_list:
+            if len(p.__code__.co_varnames) != 2:
+                raise ValueError("primers MUST take EXACTLY the following 2 parameters:"
+                                 "\t\tthe source MDOSequence, the index\n"
+                                 "Additional inputs should be stored inside the MDOSequence in "
+                                 "advance as attributes")
         self.primer_list = primer_list
+        for c in callback_list:
+            if len(c.__code__.co_varnames) != 3:
+                raise ValueError("callbacks MUST take EXACTLY the following 3 parameters:"
+                                 "\t\tthe source MDOSequence, the index, the return from the "
+                                 "function that executed the MDO\n"
+                                 "Additional inputs should be stored inside the MDOSequence in "
+                                 "advance as attributes")
         self.callback_list = callback_list
         if len(mdo_list) != len(callback_list) or len(mdo_list) != len(primer_list):
             raise ValueError("mdo, prelude, and callback lists must be of the same size")
@@ -68,7 +81,7 @@ class MDOSequence:
             outstr += "\tCALLBACK: " + self.callback_list[i].func_name
             outstr += "(" + ", ".join(self.callback_list[i].__code__.co_varnames) + ")" + "\n"
         other_members = [z for z in vars(self) if z not in
-                  {["label", "index", "mdo_list", "primer_list", "callback+list"]}]
+                         {["label", "index", "mdo_list", "primer_list", "callback+list"]}]
         if len(other_members) > 0:
             outstr += "-----------------------------\nADDITIONAL INFORMATION:\n"
             for member in other_members:
