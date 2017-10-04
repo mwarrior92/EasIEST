@@ -15,6 +15,15 @@ ABOUT -----------------------------------------------------
 EasIEST is all about simplifying the often painful process of deploying and
 managing repeatable, large-scale / distributed, Internet measurements.
 
+GOALS -----------------------------------------------------
+1) create an overlay system that allows for experiments to be placed on top and platform management to happen underneath
+2) structure experiment management such that details are easy to parse/recover
+3) structure experiment management such that written experiments can be repeated easily
+4) structure overlay to allow for cross-platform (RIPE Atlas, Planet Lab, etc) experiments
+5) leverage multi-platform access to choose optimal client pools for experiments
+6) structure code to allow for quick and easy extensibility (in other words, minor, experiment-specific needs should not
+require system-wide changes)
+
 COMPONENTS ------------------------------------------------
 - (1) Measurement Management System (MMS):  
 -- should be platform independent  
