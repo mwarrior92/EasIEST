@@ -1,5 +1,5 @@
-# EasIEST
-Easy Internet Experiment Setup Tool
+# EASIEST
+Expressive And Simple Internet Experiment Setup Tool
 by Marc Anthony Warrior (warrior@u.northwestern.edu)
 
 
