@@ -22,7 +22,7 @@ GOALS -----------------------------------------------------
 4) structure overlay to allow for cross-platform (RIPE Atlas, Planet Lab, etc) experiments
 5) leverage multi-platform access to choose optimal client pools for experiments
 6) structure code to allow for quick and easy extensibility (in other words, minor, experiment-specific needs should not
-require system-wide changes)
+require any changes to the tool)
 
 COMPONENTS ------------------------------------------------
 - (1) Measurement Management System (MMS):  
