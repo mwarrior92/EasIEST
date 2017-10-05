@@ -1,7 +1,7 @@
 from IPy import IP
 from geopy.distance import vincenty
+from geopy.geocoders import Nominatim
 import reverse_geocoder
-
 
 
 class Location:
@@ -11,8 +11,12 @@ class Location:
     infer_country = True
     # use geocoding to determine (as needed) a missing coordinates attribute using other attributes (e.g. country)
     infer_coordinates = False
+    # use lookup to determine (as needed) a missing ASN attribute using other attributes (e.g. IPv4)
+    infer_asn = True
 
     def __init__(self, **kwargs):
+        if self.infer_country or self.infer_coordinates:
+            self.inferences = list()
         for k in kwargs:
             setattr(self, k, kwargs[k])
 
@@ -32,14 +36,49 @@ class Location:
         if not hasattr(self, 'country') and self.infer_country:
             if hasattr(self, 'coordinates'):
                 country = reverse_geocoder.search(self.coordinates)[0]['cc']
-                if type(country) is not str or len(country) != 2:
-                    raise KeyError("'country' has not been defined for this location")
+                if type(country) is str and len(country) == 2:
+                    self.country = country
+                    self.inferences.append(('country', country))
+                    return country
+            # throw an error if we don't have any way to get the country
+            raise KeyError("member 'country' has not been defined for this location")
         elif hasattr(self, 'country'):
             return self.country
+        else:
+            # throw an error if we don't have any way to get the country
+            raise KeyError("member 'country' has not been defined for this location")
 
     def get_coordinates(self):
-        # TODO
-        pass
+        if not hasattr(self, 'coordinates') and self.infer_coordinates:
+            if hasattr(self, 'country'):
+                geolocator = Nominatim()
+                loc = geolocator.geocode(self.country)
+                self.coordinates = (loc.latitude, loc.longitude)
+                self.inferences.append(('coordinates', self.coordinates))
+                return self.coordinates
+            # throw an error if we don't have any way to get the coordinates
+            raise KeyError("member 'coordinates' has not been defined for this location")
+        elif hasattr(self, 'coordinates'):
+            return self.coordinates
+        else:
+            # throw an error if we don't have any way to get the coordinates
+            raise KeyError("member 'coordinates' has not been defined for this location")
+
+    def get_asn(self):
+        if not hasattr(self, 'asn') and self.infer_asn:
+            if hasattr(self, 'ipv4'):
+                # TODO
+                pass
+            elif hasattr(self, 'ipv6'):
+                # TODO
+                pass
+            # throw an error if we don't have any way to get the ASN
+            raise KeyError("member 'asn' has not been defined for this location")
+        elif hasattr(self, 'asn'):
+            return self.asn
+        else:
+            # throw an error if we don't have any way to get the ASN
+            raise KeyError("member 'asn' has not been defined for this location")
 
 
 class Client:
@@ -61,12 +100,16 @@ class TargetLocation:
             raise ValueError("expected parameters format: (lat, long) (tuple(float, float)), kilometers radius (float)")
         self.coordinate_circle = {'coordinates': coordinates, 'radius': radius}
 
-    def set_country(self, country):
-        if len(country) == 2 and country.isupper():
-            self.country = country
-        else:
-            # TODO: should automate this to pull country code list from a file and do conversions for other formats
-            raise ValueError("expected capitalized, 2 char country code - for example, 'US', 'FR', etc")
+    def set_countries(self, countries):
+        self.countries = list()
+        if type(countries) is not list or type(countries) is not tuple:
+            raise ValueError("expected list of capitalized, 2 char country codes")
+        for country in countries:
+            if len(country) == 2 and country.isupper():
+                self.countries.append(country)
+            else:
+                # TODO: should automate this to pull country code list from a file and do conversions for other formats
+                raise ValueError("expected capitalized, 2 char country code - for example, 'US', 'FR', etc")
 
     def set_ipv4_subnet(self, subnet):
         self.ipv4_subnet = IP(subnet, make_net=True)
@@ -84,12 +127,13 @@ class TargetLocation:
         coordinates = self.coordinate_circle['coordinates']
         radius = self.coordinate_circle['radius']
         if hasattr(location, 'coordinates'):
-            return vincenty(location.coordinates, coordinates).kilometers <= radius
-        elif hasattr(location, 'country'):
-            # TODO
-            pass
+            return vincenty(location.get_coordinates(), coordinates).kilometers <= radius
 
+    def countries_contains(self, location):
+        return location.get_country() in self.countries
 
+    def asns_contains(self, location):
+        return location.get_asn() in self.asns
 
     def __contains__(self, location):
         if type(location) is Client:
@@ -98,13 +142,24 @@ class TargetLocation:
             raise ValueError("expected input type to be Client or Location")
 
         # we only need to check the constraints that have actually been set for this target location
-        for area in vars(self):
-            if hasattr(self, area+"_contains"):
-                if not getattr(self, area+"_contains")(location):
+        for constraint in vars(self):
+            if hasattr(self, constraint+"_contains"):
+                try:
+                    if not getattr(self, constraint+"_contains")(location):
+                        return False
+                except KeyError:
                     return False
-            elif hasattr(location, area):
-                if getattr(location, area) != getattr(self, area):
+            elif hasattr(location, constraint):
+                if isinstance(getattr(self, constraint), type(getattr(location, constraint))):
+                    if not getattr(location, constraint) == getattr(self, constraint):
+                        return False
+                elif hasattr(getattr(self, constraint), '__contains__'):
+                    if not getattr(location, constraint) in getattr(self, constraint):
+                        return False
+                else:
                     return False
+            else:
+                return False
 
     def set(self, member, val):
         if hasattr(self, "set_"+member):
@@ -126,3 +181,12 @@ class ClientGroup:
     """base class for a group of clients that will perform measurements"""
     def __init__(self):
         self.clients = None
+
+    def split_by(self, feature):
+        # TODO - out put subgroups e.g. grouped by country, etc
+        pass
+
+    @staticmethod
+    def merge(*groups):
+        # TODO - merge groups together
+        pass
