@@ -140,3 +140,21 @@ def remove(fname):
         logger.error('OSError removing '+fname+"; "+str(e))
         return
     logger.debug("Successfully removed "+fname)
+
+
+class Extendable:
+    def get(self, member):
+        """
+        :param member: (str) name of member whose value should be returned
+        :return:
+        """
+        if hasattr(self, "get_"+member):
+            return getattr(self, "get_"+member)()
+        else:
+            return vars(self)[member]
+
+    def set(self, member, val):
+        if hasattr(self, "set_"+member):
+            getattr(self, "set_"+member)(val)
+        else:
+            setattr(self, member, val)

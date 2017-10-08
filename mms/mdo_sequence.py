@@ -1,4 +1,5 @@
 import mdo
+from ..helpers import Extendable
 
 
 def build_measurement(**kwargs):
@@ -23,7 +24,7 @@ def build_measurement(**kwargs):
     return mclass(**kwargs)
 
 
-class MDOSequence:
+class MDOSequence(Extendable):
     def __init__(self, label, mdo_list, primer_list, callback_list, **kwargs):
         """
         container for a set of MDOs to be performed sequentially, back to back, by a single client
@@ -44,16 +45,14 @@ class MDOSequence:
               Additional inputs should be stored inside the MDOSequence in advance as attributes
 
         """
-        self.label = str(label)
-        self.mdo_list = mdo_list
-        self.index = 0
+        if len(mdo_list) != len(callback_list) or len(mdo_list) != len(primer_list):
+            raise ValueError("mdo, prelude, and callback lists must be of the same size")
         for p in primer_list:
             if len(p.__code__.co_varnames) != 2:
                 raise ValueError("primers MUST take EXACTLY the following 2 parameters:"
                                  "\t\tthe source MDOSequence, the index\n"
                                  "Additional inputs should be stored inside the MDOSequence in "
                                  "advance as attributes")
-        self.primer_list = primer_list
         for c in callback_list:
             if len(c.__code__.co_varnames) != 3:
                 raise ValueError("callbacks MUST take EXACTLY the following 3 parameters:"
@@ -61,9 +60,11 @@ class MDOSequence:
                                  "function that executed the MDO\n"
                                  "Additional inputs should be stored inside the MDOSequence in "
                                  "advance as attributes")
-        self.callback_list = callback_list
-        if len(mdo_list) != len(callback_list) or len(mdo_list) != len(primer_list):
-            raise ValueError("mdo, prelude, and callback lists must be of the same size")
+        self.set('label', str(label))
+        self.set('mdo_list', mdo_list)
+        self.set('index', 0)
+        self.set('primer_list', primer_list)
+        self.set('callback_list', callback_list)
         for k in kwargs:
             setattr(self, k, kwargs[k])
 
@@ -71,15 +72,15 @@ class MDOSequence:
         return "MDOSequence(" + self.get("label") + ")"
 
     def __str__(self):
-        outstr = "*****************************\n" + "LABEL: " + self.label + "\n"
+        outstr = "*****************************\n" + "LABEL: " + self.get('label') + "\n"
         outstr += "-----------------------------\n"
         outstr += "MDOs:\n"
-        for i, mdoi in enumerate(self.mdo_list):
-            outstr += "\tPRELUDE: " + self.primer_list[i].func_name
-            outstr += "(" + ", ".join(self.primer_list[i].__code__.co_varnames) + ")" + "\n"
+        for i, mdoi in enumerate(self.get('mdo_list')):
+            outstr += "\tPRELUDE: " + self.get('primer_list')[i].func_name
+            outstr += "(" + ", ".join(self.get('primer_list')[i].__code__.co_varnames) + ")" + "\n"
             outstr += "\n".join(["|\t\t"+z for z in str(mdoi).split("\n")]) + "\n"
-            outstr += "\tCALLBACK: " + self.callback_list[i].func_name
-            outstr += "(" + ", ".join(self.callback_list[i].__code__.co_varnames) + ")" + "\n"
+            outstr += "\tCALLBACK: " + self.get('callback_list')[i].func_name
+            outstr += "(" + ", ".join(self.get('callback_list')[i].__code__.co_varnames) + ")" + "\n"
         other_members = [z for z in vars(self) if z not in
                          {["label", "index", "mdo_list", "primer_list", "callback+list"]}]
         if len(other_members) > 0:
@@ -92,26 +93,16 @@ class MDOSequence:
         return self
 
     def next(self):
-        if self.index < len(self.mdo_list):
-            mdoi = self.mdo_list[self.index]
-            preludei = self.primer_list[self.index]
-            callbacki = self.callback_list[self.index]
-            index = self.index
-            self.index += 1
+        if self.get('index') < len(self.get('mdo_list')):
+            mdoi = self.get('mdo_list')[self.get('index')]
+            preludei = self.get('primer_list')[self.get('index')]
+            callbacki = self.get('callback_list')[self.get('index')]
+            index = self.get('index')
+            self.set('index', index + 1)
             return {"mdo": mdoi, "prelude": preludei, "callback": callbacki, "index": index}
         else:
             raise StopIteration
 
     def get_current_mdo(self):
-        if self.index < len(self.mdo_list):
-            return self.mdo_list[self.index].get_label()
-
-    def get(self, member):
-        """
-        :param member: (str) name of member whose value should be returned
-        :return:
-        """
-        if hasattr(self, "get_"+member):
-            return getattr(self, "get_"+member)()
-        else:
-            return vars(self)[member]
+        if self.get('index') < len(self.get('mdo_list')):
+            return self.get('mdo_list')[self.get('index')].get_label()

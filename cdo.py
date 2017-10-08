@@ -2,9 +2,10 @@ from IPy import IP
 from geopy.distance import vincenty
 from geopy.geocoders import Nominatim
 import reverse_geocoder
+from helpers import Extendable
 
 
-class Location:
+class Location(Extendable):
     """base class for a client's location"""
 
     # use geocoding to determine (as needed) a missing country attribute using other attributes (e.g. coordinates)
@@ -18,26 +19,26 @@ class Location:
         if self.infer_country or self.infer_coordinates:
             self.inferences = list()
         for k in kwargs:
-            setattr(self, k, kwargs[k])
+            self.set(k, kwargs[k])
 
     def set_ipv4(self, ipv4):
-        self.ipv4 = IP(ipv4)
+        self.set('ipv4', IP(ipv4))
 
     def set_ipv6(self, ipv6):
-        self.ipv6 = IP(ipv6)
+        self.set('ipv6', IP(ipv6))
 
     def get_ipv4_subnet(self, masklen):
-        return IP(str(self.ipv4)+'/'+str(masklen))
+        return IP(str(self.get('ipv4'))+'/'+str(masklen))
 
     def get_ipv6_subnet(self, masklen):
-        return IP(str(self.ipv6) + '/' + str(masklen))
+        return IP(str(self.get('ipv6')) + '/' + str(masklen))
 
     def get_country(self):
         if not hasattr(self, 'country') and self.infer_country:
             if hasattr(self, 'coordinates'):
-                country = reverse_geocoder.search(self.coordinates)[0]['cc']
+                country = reverse_geocoder.search(self.get('coordinates'))[0]['cc']
                 if type(country) is str and len(country) == 2:
-                    self.country = country
+                    self.set('country', country)
                     self.inferences.append(('country', country))
                     return country
             # throw an error if we don't have any way to get the country
@@ -52,8 +53,8 @@ class Location:
         if not hasattr(self, 'coordinates') and self.infer_coordinates:
             if hasattr(self, 'country'):
                 geolocator = Nominatim()
-                loc = geolocator.geocode(self.country)
-                self.coordinates = (loc.latitude, loc.longitude)
+                loc = geolocator.geocode(self.get('country'))
+                self.set('coordinates', (loc.latitude, loc.longitude))
                 self.inferences.append(('coordinates', self.coordinates))
                 return self.coordinates
             # throw an error if we don't have any way to get the coordinates
@@ -81,14 +82,14 @@ class Location:
             raise KeyError("member 'asn' has not been defined for this location")
 
 
-class Client:
+class Client(Extendable):
     """base class for a client that will perform measurements"""
     def __init__(self, platform, location):
         self.platform = platform
         self.location = location
 
 
-class TargetLocation:
+class TargetLocation(Extendable):
     """class for describing the set of required location constraints for client selection"""
 
     def __init__(self, **kwargs):
@@ -161,20 +162,18 @@ class TargetLocation:
             else:
                 return False
 
-    def set(self, member, val):
-        if hasattr(self, "set_"+member):
-            getattr(self, "set_"+member)(val)
-        else:
-            setattr(self, member, val)
 
-
-class TargetClientGroup:
+class TargetClientGroup(Extendable):
     def __init__(self, target_location=None, target_quantity=None, platforms=None, **kwargs):
         self.target_location = target_location
         self.target_quantity = target_quantity
         self.platforms = platforms
         for k in kwargs:
-            setattr(self, k, kwargs[k])
+            self.set(k, kwargs[k])
+
+    def __contains__(self, client):
+        if client.get['platform'] not in self.get['platform']:
+            return False
 
 
 class ClientGroup:
