@@ -2,6 +2,7 @@ import inspect
 import os
 import shutil
 import logging.config
+from ipwhois import IPWhois
 
 """
 NOTE: most of the helper functions are just to make main code less cluttered
@@ -141,6 +142,10 @@ def remove(fname):
         return
     logger.debug("Successfully removed "+fname)
 
+##############################################################
+#                   GENERIC BASE CLASSES
+##############################################################
+
 
 class Extendable:
     def get(self, member):
@@ -154,7 +159,59 @@ class Extendable:
             return vars(self)[member]
 
     def set(self, member, val):
+        """
+
+        :param member:
+        :param val:
+        :return:
+        """
         if hasattr(self, "set_"+member):
             getattr(self, "set_"+member)(val)
         else:
             setattr(self, member, val)
+
+##############################################################
+#               NETWORKING CLASSES AND METHODS
+##############################################################
+
+
+def whois_lookup(ipstr, **kwargs):
+    """
+
+    :param ipstr:
+    :param kwargs:
+    :return: (dict) result of IPWhois lookup
+
+     NOTE: this should be wrapped by a decorator to implement caching
+     for faster/more reliable lookups
+    """
+    obj = IPWhois(ipstr)
+    return obj.lookup_rdap(**kwargs)
+
+
+def asn_lookup(ipstr, **kwargs):
+    """
+
+    :param ipstr:
+    :param kwargs:
+    :return:
+    """
+    results = whois_lookup(ipstr, **kwargs)
+    if results is not None:
+        return int(results['asn'])
+    else:
+        return None
+
+
+def cidr_lookup(ipstr, **kwargs):
+    """
+
+    :param ipstr:
+    :param kwargs:
+    :return:
+    """
+    results = whois_lookup(ipstr, **kwargs)
+    if results is not None:
+        return int(results['network']['cidr'])
+    else:
+        return None

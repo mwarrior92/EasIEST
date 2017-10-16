@@ -1,8 +1,8 @@
 from IPy import IP
 from geopy.distance import vincenty
 from geopy.geocoders import Nominatim
-import reverse_geocoder
 from helpers import Extendable
+from helpers import asn_lookup
 
 
 class Location(Extendable):
@@ -22,10 +22,10 @@ class Location(Extendable):
             self.set(k, kwargs[k])
 
     def set_ipv4(self, ipv4):
-        self.set('ipv4', IP(ipv4))
+        self.ipv4 = IP(ipv4)
 
     def set_ipv6(self, ipv6):
-        self.set('ipv6', IP(ipv6))
+        self.ipv6 = IP(ipv6)
 
     def get_ipv4_subnet(self, masklen):
         return IP(str(self.get('ipv4'))+'/'+str(masklen))
@@ -36,8 +36,11 @@ class Location(Extendable):
     def get_country(self):
         if not hasattr(self, 'country') and self.infer_country:
             if hasattr(self, 'coordinates'):
-                country = reverse_geocoder.search(self.get('coordinates'))[0]['cc']
+                geolocator = Nominatim()
+                loc = geolocator.reverse(self.get('coordinates'))
+                country = loc.raw['address']['country_code']
                 if type(country) is str and len(country) == 2:
+                    country = country.upper()
                     self.set('country', country)
                     self.inferences.append(('country', country))
                     return country
@@ -54,9 +57,10 @@ class Location(Extendable):
             if hasattr(self, 'country'):
                 geolocator = Nominatim()
                 loc = geolocator.geocode(self.get('country'))
-                self.set('coordinates', (loc.latitude, loc.longitude))
-                self.inferences.append(('coordinates', self.coordinates))
-                return self.coordinates
+                coordinates = (loc.latitude, loc.longitude)
+                self.set('coordinates', coordinates)
+                self.inferences.append(('coordinates', coordinates))
+                return coordinates
             # throw an error if we don't have any way to get the coordinates
             raise KeyError("member 'coordinates' has not been defined for this location")
         elif hasattr(self, 'coordinates'):
@@ -68,11 +72,15 @@ class Location(Extendable):
     def get_asn(self):
         if not hasattr(self, 'asn') and self.infer_asn:
             if hasattr(self, 'ipv4'):
-                # TODO
-                pass
+                asn = asn_lookup(str(self.get('ipv4')))
+                self.set('asn', asn)
+                self.inferences.append(('asn', asn))
+                return asn
             elif hasattr(self, 'ipv6'):
-                # TODO
-                pass
+                asn = asn_lookup(str(self.get('ipv6')))
+                self.set('asn', asn)
+                self.inferences.append(('asn', asn))
+                return asn
             # throw an error if we don't have any way to get the ASN
             raise KeyError("member 'asn' has not been defined for this location")
         elif hasattr(self, 'asn'):
@@ -84,9 +92,11 @@ class Location(Extendable):
 
 class Client(Extendable):
     """base class for a client that will perform measurements"""
-    def __init__(self, platform, location):
+    def __init__(self, platform, location, **kwargs):
         self.platform = platform
         self.location = location
+        for k in kwargs:
+            setattr(self, k, kwargs[k])
 
 
 class TargetLocation(Extendable):
@@ -134,7 +144,7 @@ class TargetLocation(Extendable):
         return location.get_country() in self.countries
 
     def asns_contains(self, location):
-        return location.get_asn() in self.asns
+        return location.get_asn() in self.get('asns')
 
     def __contains__(self, location):
         if type(location) is Client:
@@ -161,10 +171,11 @@ class TargetLocation(Extendable):
                     return False
             else:
                 return False
+        return True
 
 
 class TargetClientGroup(Extendable):
-    def __init__(self, target_location=None, target_quantity=None, platforms=None, **kwargs):
+    def __init__(self, target_location, target_quantity=None, platforms=None, **kwargs):
         self.target_location = target_location
         self.target_quantity = target_quantity
         self.platforms = platforms
@@ -172,8 +183,33 @@ class TargetClientGroup(Extendable):
             self.set(k, kwargs[k])
 
     def __contains__(self, client):
-        if client.get['platform'] not in self.get['platform']:
+        target_location = self.get('target_location')
+        platforms = self.get('platforms')
+        if platforms is not None:
+            if client.get['platform'] not in platforms:
             return False
+        if client.location not in target_location:
+            return False
+        for constraint in vars(self):
+            if hasattr(self, constraint+"_contains"):
+                try:
+                    if not getattr(self, constraint+"_contains")(client):
+                        return False
+                except KeyError:
+                    return False
+            elif hasattr(client, constraint):
+                if isinstance(getattr(self, constraint), type(getattr(client, constraint))):
+                    if not getattr(client, constraint) == getattr(self, constraint):
+                        return False
+                elif hasattr(getattr(self, constraint), '__contains__'):
+                    if not getattr(client, constraint) in getattr(self, constraint):
+                        return False
+                else:
+                    return False
+            else:
+                return False
+        return True
+
 
 
 class ClientGroup:
