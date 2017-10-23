@@ -153,7 +153,7 @@ class TargetLocation(Extendable):
             raise ValueError("expected input type to be Client or Location")
 
         # we only need to check the constraints that have actually been set for this target location
-        for constraint in vars(self):
+        for constraint in vars(self):  # dynamic check
             if hasattr(self, constraint+"_contains"):
                 try:
                     if not getattr(self, constraint+"_contains")(location):
@@ -162,10 +162,10 @@ class TargetLocation(Extendable):
                     return False
             elif hasattr(location, constraint):
                 if isinstance(getattr(self, constraint), type(getattr(location, constraint))):
-                    if not getattr(location, constraint) == getattr(self, constraint):
+                    if getattr(location, constraint) != getattr(self, constraint):
                         return False
                 elif hasattr(getattr(self, constraint), '__contains__'):
-                    if not getattr(location, constraint) in getattr(self, constraint):
+                    if getattr(location, constraint) not in getattr(self, constraint):
                         return False
                 else:
                     return False
@@ -187,10 +187,12 @@ class TargetClientGroup(Extendable):
         platforms = self.get('platforms')
         if platforms is not None:
             if client.get['platform'] not in platforms:
-            return False
+                return False
         if client.location not in target_location:
             return False
-        for constraint in vars(self):
+
+        # we only need to check the constraints that have actually been set for this target location
+        for constraint in vars(self):  # dynamic check
             if hasattr(self, constraint+"_contains"):
                 try:
                     if not getattr(self, constraint+"_contains")(client):
@@ -199,10 +201,10 @@ class TargetClientGroup(Extendable):
                     return False
             elif hasattr(client, constraint):
                 if isinstance(getattr(self, constraint), type(getattr(client, constraint))):
-                    if not getattr(client, constraint) == getattr(self, constraint):
+                    if getattr(client, constraint) != getattr(self, constraint):
                         return False
                 elif hasattr(getattr(self, constraint), '__contains__'):
-                    if not getattr(client, constraint) in getattr(self, constraint):
+                    if getattr(client, constraint) not in getattr(self, constraint):
                         return False
                 else:
                     return False
