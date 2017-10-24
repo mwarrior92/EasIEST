@@ -3,6 +3,9 @@ from geopy.distance import vincenty
 from geopy.geocoders import Nominatim
 from helpers import Extendable
 from helpers import asn_lookup
+from collections import defaultdict
+import random
+
 
 
 class Location(Extendable):
@@ -216,14 +219,40 @@ class TargetClientGroup(Extendable):
 
 class ClientGroup:
     """base class for a group of clients that will perform measurements"""
-    def __init__(self):
-        self.clients = None
+    def __init__(self, clients=None):
+        if type(clients) is list:
+            self.clients = clients
+        else:
+            self.clients = list()
 
-    def split_by(self, feature):
-        # TODO - out put subgroups e.g. grouped by country, etc
-        pass
+    def add_client(self, client):
+        self.clients.append(client)
+
+    def add_clients(self, clients):
+        self.clients += clients
+
+    def split(self, check_method):
+        """
+        outputs a dictionary of smaller ClientGroups, grouped by the output of check_method
+        :param check_method: a method whose input is a Client and whose output is a corresponding
+         group label for that client
+        :return:
+        """
+        outgroups = defaultdict(ClientGroup)
+        for client in self.clients:
+            outgroups[check_method(client)].add_client(client)
+        return outgroups
 
     @staticmethod
     def merge(*groups):
-        # TODO - merge groups together
-        pass
+        cg = ClientGroup()
+        for group in groups:
+            cg.add_clients(group.clients)
+        return cg
+
+    def random_sample(self, sample_size):
+        return random.sample(self.clients, sample_size)
+
+    def __iter__(self):
+        for client in self.clients:
+            yield client

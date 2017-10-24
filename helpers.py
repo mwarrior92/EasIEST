@@ -12,6 +12,13 @@ NOTE: most of the helper functions are just to make main code less cluttered
 #                       PATH SETUP
 ##############################################################
 
+
+def mydir():
+    f = os.path.abspath(inspect.stack()[1][1])  # source [1]
+    d = "/".join(f.split("/")[:-1]) + "/"
+    return d
+
+
 self_file = os.path.abspath(inspect.stack()[0][1]) # source [1]
 top_dir = "/".join(self_file.split("/")[:-1])+"/"
 print top_dir
@@ -28,6 +35,7 @@ logger = logging.getLogger(__name__)
 ##############################################################
 #                        FILE I/O
 ##############################################################
+
 
 def overwrite(path, content):
     """
@@ -215,3 +223,11 @@ def cidr_lookup(ipstr, **kwargs):
         return int(results['network']['cidr'])
     else:
         return None
+
+
+class TimeoutError(BaseException):
+    pass
+
+
+def timeout_handler(signum, frame):
+    raise TimeoutError("timeout")
