@@ -21,7 +21,7 @@ def mydir():
 
 self_file = os.path.abspath(inspect.stack()[0][1]) # source [1]
 top_dir = "/".join(self_file.split("/")[:-1])+"/"
-print top_dir
+
 
 ##############################################################
 #                     LOGGING SETUP
@@ -31,6 +31,7 @@ print top_dir
 logging.config.fileConfig(top_dir+'logging.conf',
         disable_existing_loggers=False)
 logger = logging.getLogger(__name__)
+logger.debug("top directory level set to: "+top_dir)
 
 ##############################################################
 #                        FILE I/O

@@ -72,22 +72,32 @@ class Location(Extendable):
             # throw an error if we don't have any way to get the coordinates
             raise KeyError("member 'coordinates' has not been defined for this location")
 
-    def get_asn(self):
-        if not hasattr(self, 'asn') and self.infer_asn:
+    def get_asn_v4(self):
+        if not hasattr(self, 'asn_v4') and self.infer_asn:
             if hasattr(self, 'ipv4'):
                 asn = asn_lookup(str(self.get('ipv4')))
                 self.set('asn', asn)
-                self.inferences.append(('asn', asn))
-                return asn
-            elif hasattr(self, 'ipv6'):
-                asn = asn_lookup(str(self.get('ipv6')))
-                self.set('asn', asn)
-                self.inferences.append(('asn', asn))
+                self.inferences.append(('asn_v4', asn))
                 return asn
             # throw an error if we don't have any way to get the ASN
             raise KeyError("member 'asn' has not been defined for this location")
-        elif hasattr(self, 'asn'):
-            return self.asn
+        elif hasattr(self, 'asn_v4'):
+            return self.asn_v4
+        else:
+            # throw an error if we don't have any way to get the ASN
+            raise KeyError("member 'asn' has not been defined for this location")
+
+    def get_asn_v6(self):
+        if not hasattr(self, 'asn_v6') and self.infer_asn:
+            if hasattr(self, 'ipv6'):
+                asn = asn_lookup(str(self.get('ipv6')))
+                self.set('asn_v6', asn)
+                self.inferences.append(('asn_v6', asn))
+                return asn
+            # throw an error if we don't have any way to get the ASN
+            raise KeyError("member 'asn' has not been defined for this location")
+        elif hasattr(self, 'asn_v6'):
+            return self.asn_v6
         else:
             # throw an error if we don't have any way to get the ASN
             raise KeyError("member 'asn' has not been defined for this location")
