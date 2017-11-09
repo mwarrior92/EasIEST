@@ -2,9 +2,11 @@ import signal
 from ....helpers import timeout_handler
 from ....helpers import mydir
 from ....helpers import logger
+from ....helpers import Extendable
 import json
 import ripe.atlas.cousteau as rac
 from ....cdo import Client, ClientGroup, Location
+from datetime import datetime
 
 with open(mydir()+'ripeatlas_config.json.json', 'r+') as f:
     config_data = json.load(f)
@@ -43,7 +45,6 @@ def make_ping_test(destinations, af=4, description="ping measurement", **kwargs)
 
 def make_traceroute_test(destinations, af=4, protocol="UDP", description="traceroute measurement", **kwargs):
     """
-
     :param destinations: (list) list of IP (or FQDN) destinations for some measurement set of probes to traceroute
     :param kwargs: can use ping measurement definitions, as defined in the v2 api reference
     :return: (list) list of ping measurement objects
@@ -72,20 +73,102 @@ def make_traceroute_test(destinations, af=4, protocol="UDP", description="tracer
 # PROBE SELECTION
 ##############################################################################
 
-
 def get_all_probes(**kwargs):
     return rac.ProbeRequest(**kwargs)
 
 
 def probes_to_clients(probes):
+    """
+    converts list of probes into ClientGroup
+    :param probes: (iter) list of probes
+    :return: (ClientGroup) group of clients constructed from provided list of probes
+    """
     clients = ClientGroup()
     for probe in probes:
+        if 'address_v4' in probe:
+            probe['ipv4'] = probe['address_v4']
+        if 'address_v6' in probe:
+            probe['ipv6'] = probe['address_v6']
         clients.add_client(
             Client(
                 platform='ripe_atlas',
-                location=Location(
-                    country=probe['country_code'],
-                    asn=probe['asn_v4']
-                )
+                location=Location(**probe)
             )
         )
+    return clients
+
+
+##############################################################################
+# MEASUREMENT MANAGEMENT
+##############################################################################
+
+
+def make_source(probe_ids):
+    str_ids = ""
+    for probe_id in probe_ids:
+        str_ids += str(probe_id) + ","
+    return rac.AtlasSource(
+        type="probes",
+        value=str_ids,
+        requested=len(probe_ids)
+    )
+
+
+def make_request(measurement, source, **kwargs):
+    if 'start_time' not in kwargs:
+        kwargs['start_time'] = datetime.utcnow()
+    if 'key' not in kwargs:
+        kwargs['key'] = config_data['schedule_meas_key']
+    if 'tags' not in kwargs:
+        kwargs['tags'] = {"include": ["system-ipv4-works"]}
+
+    return rac.AtlasCreateRequest(
+        measurement=measurement,
+        sources=[source],
+        **kwargs
+    )
+
+
+def send_request(probe_ids, measurement, **kwargs):
+    source = make_source(probe_ids)
+    request = make_request(measurement, source, **kwargs)
+    return request.create()
+
+
+def result_handler(*args):
+    print "result received!"
+    print args
+
+
+class MeasurementManager(Extendable):
+    def __init__(self, probe_ids, measurement, stream_results=True, on_response=result_handler,
+                 timeout=None, **kwargs):
+        self.probe_ids = probe_ids
+        self.measurement = measurement
+        self.stream_results = stream_results
+        self.result_handler = on_response
+        self.timeout = timeout
+        for k in kwargs:
+            self.set(k, kwargs[k])
+        self.is_success, self.response = send_request(probe_ids, measurement, **kwargs)
+        if self.is_success:
+            self.meas_ids = self.response['measurements']
+
+        if self.stream_results:
+            pass
+
+
+    def streamer(self):
+        atlas_stream = rac.AtlasStream()
+        atlas_stream.connect()
+
+        atlas_stream.bind_channel("probe", self.result_handler)
+        atlas_stream.start_stream()
+        atlas_stream.timeout(self.timeout)
+        atlas_stream.disconnect()
+
+
+
+
+
+

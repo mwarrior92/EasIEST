@@ -12,14 +12,14 @@ class Location(Extendable):
     """base class for a client's location"""
 
     # use geocoding to determine (as needed) a missing country attribute using other attributes (e.g. coordinates)
-    infer_country = True
+    infer_country_code = True
     # use geocoding to determine (as needed) a missing coordinates attribute using other attributes (e.g. country)
     infer_coordinates = False
     # use lookup to determine (as needed) a missing ASN attribute using other attributes (e.g. IPv4)
     infer_asn = True
 
     def __init__(self, **kwargs):
-        if self.infer_country or self.infer_coordinates:
+        if self.infer_country_code or self.infer_coordinates:
             self.inferences = list()
         for k in kwargs:
             self.set(k, kwargs[k])
@@ -36,59 +36,61 @@ class Location(Extendable):
     def get_ipv6_subnet(self, masklen):
         return IP(str(self.get('ipv6')) + '/' + str(masklen))
 
-    def get_country(self):
-        if not hasattr(self, 'country') and self.infer_country:
+    def get_country_code(self):
+        if hasattr(self, 'country_code'):
+            return self.country_code
+        elif self.infer_country_code:
             if hasattr(self, 'coordinates'):
                 geolocator = Nominatim()
                 loc = geolocator.reverse(self.get('coordinates'))
                 country = loc.raw['address']['country_code']
                 if type(country) is str and len(country) == 2:
                     country = country.upper()
-                    self.set('country', country)
-                    self.inferences.append(('country', country))
+                    self.set('country_code', country)
+                    self.inferences.append(('country_code', country))
                     return country
             # throw an error if we don't have any way to get the country
             raise KeyError("member 'country' has not been defined for this location")
-        elif hasattr(self, 'country'):
-            return self.country
         else:
             # throw an error if we don't have any way to get the country
             raise KeyError("member 'country' has not been defined for this location")
 
     def get_coordinates(self):
-        if not hasattr(self, 'coordinates') and self.infer_coordinates:
-            if hasattr(self, 'country'):
+        if hasattr(self, 'coordinates'):
+            return self.coordinates
+        elif self.infer_coordinates:
+            if hasattr(self, 'country_code'):
                 geolocator = Nominatim()
-                loc = geolocator.geocode(self.get('country'))
+                loc = geolocator.geocode(self.get('country_code'))
                 coordinates = (loc.latitude, loc.longitude)
                 self.set('coordinates', coordinates)
                 self.inferences.append(('coordinates', coordinates))
                 return coordinates
             # throw an error if we don't have any way to get the coordinates
             raise KeyError("member 'coordinates' has not been defined for this location")
-        elif hasattr(self, 'coordinates'):
-            return self.coordinates
         else:
             # throw an error if we don't have any way to get the coordinates
             raise KeyError("member 'coordinates' has not been defined for this location")
 
     def get_asn_v4(self):
-        if not hasattr(self, 'asn_v4') and self.infer_asn:
+        if hasattr(self, 'asn_v4'):
+            return self.asn_v4
+        elif self.infer_asn:
             if hasattr(self, 'ipv4'):
                 asn = asn_lookup(str(self.get('ipv4')))
-                self.set('asn', asn)
+                self.set('asn_v4', asn)
                 self.inferences.append(('asn_v4', asn))
                 return asn
             # throw an error if we don't have any way to get the ASN
             raise KeyError("member 'asn' has not been defined for this location")
-        elif hasattr(self, 'asn_v4'):
-            return self.asn_v4
         else:
             # throw an error if we don't have any way to get the ASN
             raise KeyError("member 'asn' has not been defined for this location")
 
     def get_asn_v6(self):
-        if not hasattr(self, 'asn_v6') and self.infer_asn:
+        if hasattr(self, 'asn_v6'):
+            return self.asn_v6
+        elif self.infer_asn:
             if hasattr(self, 'ipv6'):
                 asn = asn_lookup(str(self.get('ipv6')))
                 self.set('asn_v6', asn)
@@ -96,8 +98,6 @@ class Location(Extendable):
                 return asn
             # throw an error if we don't have any way to get the ASN
             raise KeyError("member 'asn' has not been defined for this location")
-        elif hasattr(self, 'asn_v6'):
-            return self.asn_v6
         else:
             # throw an error if we don't have any way to get the ASN
             raise KeyError("member 'asn' has not been defined for this location")
@@ -154,7 +154,7 @@ class TargetLocation(Extendable):
             return vincenty(location.get_coordinates(), coordinates).kilometers <= radius
 
     def countries_contains(self, location):
-        return location.get_country() in self.countries
+        return location.get_country_code() in self.countries
 
     def asns_contains(self, location):
         return location.get_asn() in self.get('asns')
