@@ -6,9 +6,10 @@ from ....helpers import Extendable
 import json
 import ripe.atlas.cousteau as rac
 from ....cdo import Client, ClientGroup, Location
-from datetime import datetime
+from ....mms import collector
+import datetime
 
-with open(mydir()+'ripeatlas_config.json.json', 'r+') as f:
+with open(mydir()+'ripeatlas_config.json', 'r+') as f:
     config_data = json.load(f)
 
 
@@ -98,6 +99,10 @@ def probes_to_clients(probes):
     return clients
 
 
+def probes_to_ids(probes):
+    return [p['id'] for p in probes]
+
+
 ##############################################################################
 # MEASUREMENT MANAGEMENT
 ##############################################################################
@@ -109,21 +114,22 @@ def make_source(probe_ids):
         str_ids += str(probe_id) + ","
     return rac.AtlasSource(
         type="probes",
-        value=str_ids,
+        value=str_ids[:-1],
         requested=len(probe_ids)
     )
 
 
 def make_request(measurement, source, **kwargs):
     if 'start_time' not in kwargs:
-        kwargs['start_time'] = datetime.utcnow()
+        kwargs['start_time'] = datetime.datetime.utcnow()+datetime.timedelta(seconds=15)
+
     if 'key' not in kwargs:
         kwargs['key'] = config_data['schedule_meas_key']
     if 'tags' not in kwargs:
         kwargs['tags'] = {"include": ["system-ipv4-works"]}
 
     return rac.AtlasCreateRequest(
-        measurement=measurement,
+        measurements=measurement,
         sources=[source],
         **kwargs
     )
@@ -135,40 +141,12 @@ def send_request(probe_ids, measurement, **kwargs):
     return request.create()
 
 
-def result_handler(*args):
-    print "result received!"
-    print args
-
-
-class MeasurementManager(Extendable):
-    def __init__(self, probe_ids, measurement, stream_results=True, on_response=result_handler,
-                 timeout=None, **kwargs):
-        self.probe_ids = probe_ids
-        self.measurement = measurement
-        self.stream_results = stream_results
-        self.result_handler = on_response
-        self.timeout = timeout
-        for k in kwargs:
-            self.set(k, kwargs[k])
-        self.is_success, self.response = send_request(probe_ids, measurement, **kwargs)
-        if self.is_success:
-            self.meas_ids = self.response['measurements']
-
-        if self.stream_results:
-            pass
-
-
-    def streamer(self):
-        atlas_stream = rac.AtlasStream()
-        atlas_stream.connect()
-
-        atlas_stream.bind_channel("probe", self.result_handler)
-        atlas_stream.start_stream()
-        atlas_stream.timeout(self.timeout)
-        atlas_stream.disconnect()
-
-
-
-
-
+def launch_measurement(probe_ids, measurement, **kwargs):
+        is_success, response = send_request(probe_ids, measurement, **kwargs)
+        if is_success:
+            logger.debug("deployed meas: "+response['measurements'][0])
+            return is_success, response
+        else:
+            logger.warning("failed to deploy: "+str(measurement)+"; "+str(response))
+            return False, {}
 

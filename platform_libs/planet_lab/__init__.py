@@ -8,7 +8,7 @@ import paramiko
 
 
 api_server = xmlrpclib.ServerProxy("https://www.planet-lab.org/PLCAPI/")
-with open(mydir()+'planetlab_config.json.json', 'r+') as f:
+with open(mydir()+'planetlab_config.json', 'r+') as f:
     config_data = json.load(f)
 
 
