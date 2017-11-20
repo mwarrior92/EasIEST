@@ -1,4 +1,6 @@
 from ....helpers import mydir, logger, format_dirpath
+from ....helpers import top_dir
+from ....helpers import datestr, timestr
 import json
 import ripe.atlas.cousteau as rac
 from ....cdo import Client, ClientGroup, Location
@@ -6,7 +8,7 @@ from ....mms import collector
 import datetime
 from ra_mro import PingResult
 
-with open(mydir()+'ripeatlas_config.json', 'r+') as f:
+with open(top_dir+'config.json', 'r+') as f:
     config_data = json.load(f)
 
 
@@ -119,9 +121,8 @@ def make_source(probe_ids):
 def make_request(measurement, source, **kwargs):
     if 'start_time' not in kwargs:
         kwargs['start_time'] = datetime.datetime.utcnow()+datetime.timedelta(seconds=15)
-
     if 'key' not in kwargs:
-        kwargs['key'] = config_data['schedule_meas_key']
+        kwargs['key'] = config_data['ripeatlas_schedule_meas_key']
     if 'tags' not in kwargs:
         kwargs['tags'] = {"include": ["system-ipv4-works"]}
 
@@ -139,34 +140,37 @@ def send_request(probe_ids, measurement, **kwargs):
 
 
 def launch_measurement(probe_ids, measurement, **kwargs):
-        is_success, response = send_request(probe_ids, measurement, **kwargs)
-        if is_success:
-            logger.debug("deployed meas: "+response['measurements'][0])
-            return is_success, response
-        else:
-            logger.warning("failed to deploy: "+str(measurement)+"; "+str(response))
-            return False, {}
+    is_success, response = send_request(probe_ids, measurement, **kwargs)
+    if is_success:
+        logger.debug("deployed meas: "+str(response['measurements'][0]))
+        return is_success, response
+    else:
+        logger.warning("failed to deploy: "+str(measurement)+"; "+str(response))
+        return False, {}
 
 
 def raw_ping_retrieval_func(label, msm_id, probe_ids):
-    raw_ping_dir = format_dirpath(mydir()+"/raw_data/ping/"+datetime.datetime.utcnow().strftime("%Yy%mm%dd/"))
-    fname = raw_ping_dir + label
+    today = datestr(datetime.datetime.utcnow())
+    raw_ping_dir = format_dirpath(
+            config_data['data_path']+"/raw_data/ripeatlas/"+today+"/")
+    fname = raw_ping_dir + label + ".json"
     kwargs = {
         'msm_id': msm_id,
         'probe_ids': probe_ids
     }
     is_success, results = rac.AtlasResultsRequest(**kwargs).create()
     meas = rac.Measurement(id=msm_id)
-    if meas.status_id < 3:
-        return False, {}, None
-    elif meas.status_id == 3:
+    print results, msm_id
+    if meas.status_id in range(5,8):
+        return True, {}, results, fname
+    elif len(results) == len(probe_ids):
         with open(fname, "w+") as f:
-            json.dump((True, results, None), f)
-        return True, results, None
+            json.dump(results, f)
+        return True, results, None, fname
     else:
         with open(fname, "w+") as f:
-            json.dump((True, {}, results), f)
-        return True, {}, results
+            json.dump(results, f)
+        return False, {}, results, fname
 
 
 def format_ping_results(raw_ping_data, label):
@@ -174,3 +178,4 @@ def format_ping_results(raw_ping_data, label):
     for p in raw_ping_data:
         ret.append(PingResult(p))
     return ret
+
