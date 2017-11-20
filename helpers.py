@@ -167,17 +167,17 @@ class Extendable:
         else:
             return vars(self)[member]
 
-    def set(self, member, val):
+    def set(self, member_name, val):
         """
 
         :param member:
         :param val:
         :return:
         """
-        if hasattr(self, "set_"+member):
-            getattr(self, "set_"+member)(val)
+        if hasattr(self, "set_"+member_name):
+            getattr(self, "set_"+member_name)(val)
         else:
-            setattr(self, member, val)
+            setattr(self, member_name, val)
 
 ##############################################################
 #               NETWORKING CLASSES AND METHODS

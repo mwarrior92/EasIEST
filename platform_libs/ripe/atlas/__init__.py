@@ -1,13 +1,10 @@
-import signal
-from ....helpers import timeout_handler
-from ....helpers import mydir
-from ....helpers import logger
-from ....helpers import Extendable
+from ....helpers import mydir, logger, format_dirpath
 import json
 import ripe.atlas.cousteau as rac
 from ....cdo import Client, ClientGroup, Location
 from ....mms import collector
 import datetime
+from ra_mro import PingResult
 
 with open(mydir()+'ripeatlas_config.json', 'r+') as f:
     config_data = json.load(f)
@@ -150,3 +147,30 @@ def launch_measurement(probe_ids, measurement, **kwargs):
             logger.warning("failed to deploy: "+str(measurement)+"; "+str(response))
             return False, {}
 
+
+def raw_ping_retrieval_func(label, msm_id, probe_ids):
+    raw_ping_dir = format_dirpath(mydir()+"/raw_data/ping/"+datetime.datetime.utcnow().strftime("%Yy%mm%dd/"))
+    fname = raw_ping_dir + label
+    kwargs = {
+        'msm_id': msm_id,
+        'probe_ids': probe_ids
+    }
+    is_success, results = rac.AtlasResultsRequest(**kwargs).create()
+    meas = rac.Measurement(id=msm_id)
+    if meas.status_id < 3:
+        return False, {}, None
+    elif meas.status_id == 3:
+        with open(fname, "w+") as f:
+            json.dump((True, results, None), f)
+        return True, results, None
+    else:
+        with open(fname, "w+") as f:
+            json.dump((True, {}, results), f)
+        return True, {}, results
+
+
+def format_ping_results(raw_ping_data, label):
+    ret = list()
+    for p in raw_ping_data:
+        ret.append(PingResult(p))
+    return ret
