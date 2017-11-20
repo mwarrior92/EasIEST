@@ -73,8 +73,40 @@ def make_traceroute_test(destinations, af=4, protocol="UDP", description="tracer
 # PROBE SELECTION
 ##############################################################################
 
-def get_all_probes(**kwargs):
+def get_probes(**kwargs):
     return rac.ProbeRequest(**kwargs)
+
+
+def get_usable_probes(**kwargs):
+    kwargs['status_name'] = 'Connected'
+    kwargs['is_public'] = True
+    return get_probes(**kwargs)
+
+
+def get_TargetLocation_probes(tl):
+    kwargs = dict()
+    if hasattr(tl, 'coordinate_circle'):
+        cc = tl.get_coordinate_circle()
+        kwargs['radius'] = cc['radius']
+        kwargs['latitude'] = cc['coordinates'][0]
+        kwargs['longitude'] = cc['coordinates'][1]
+    if hasattr(tl, 'countries'):
+        c = tl.get_countries()
+        kwargs['country_code__in'] = c
+    if hasattr(tl, 'ipv4_subnet'):
+        v4s = str(tl.get_ipv4_subnet())
+        kwargs['prefix_v4'] = v4s
+    if hasattr(tl, 'ipv6_subnet'):
+        v6s = str(tl.get_ipv6_subnet())
+        kwargs['prefix_v6'] = v6s
+    if hasattr(tl, 'v4_asns'):
+        v4a = tl.get_v4_asns()
+        kwargs['v4_asn__in'] = v4a
+    if hasattr(tl, 'v6_asns'):
+        v6a = tl.get_v6_asns()
+        kwargs['v6_asn__in'] = v6a
+
+    return get_usable_probes(**kwargs)
 
 
 def probes_to_clients(probes):
@@ -89,17 +121,28 @@ def probes_to_clients(probes):
             probe['ipv4'] = probe['address_v4']
         if 'address_v6' in probe:
             probe['ipv6'] = probe['address_v6']
+        if 'id' in probe:
+            probe['probe_id'] = probe['id']
         clients.add_client(
             Client(
-                platform='ripe_atlas',
+                platform='ripeatlas',
                 location=Location(**probe)
             )
         )
     return clients
 
 
+def get_TargetLocation_clients(tl):
+    probes = get_TargetLocation_probes(tl)
+    return probes_to_clients(probes)
+
+
 def probes_to_ids(probes):
     return [p['id'] for p in probes]
+
+
+def clients_to_probe_ids(clients):
+    return [c.get_probe_id() for c in clients]
 
 
 ##############################################################################
