@@ -2,26 +2,27 @@ import xmlrpclib
 import signal
 from ...helpers import timeout_handler
 from ...helpers import mydir
+from ...helpers import top_dir
 import json
 import getpass
 import paramiko
 
 
 api_server = xmlrpclib.ServerProxy("https://www.planet-lab.org/PLCAPI/")
-with open(mydir()+'planetlab_config.json', 'r+') as f:
+with open(top_dir+'config.json', 'r+') as f:
     config_data = json.load(f)
 
 
 def create_auth():
     auth = {}
-    auth['Username'] = config_data['username']
+    auth['Username'] = config_data['planetlab_username']
     auth['AuthString'] = getpass.getpass()
     auth['AuthMethod'] = "password"
     return auth
 
 
 # TODO cache me
-def get_slice_id(auth, slice_name=config_data['slice_name']):
+def get_slice_id(auth, slice_name=config_data['planetlab_slice_name']):
     slices = api_server.GetSlices(auth, slice_name, ['name', 'slice_id'])
     return slices[0]['slice_id']
 
@@ -103,8 +104,9 @@ def setup_node(auth, nodename, setup_method=setup_python, **kwargs):
             client = paramiko.client.SSHClient()
             client.load_system_host_keys()
             client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            client.connect(node['hostname'], key_filename=config_data['ssh_key'],
-                           username=config_data['slice_name'], timeout=3)
+            client.connect(node['hostname'],
+                    key_filename=config_data['planetlab_ssh_key'],
+                           username=config_data['planetlab_slice_name'], timeout=3)
             setup_method(client=client, node=node, **kwargs)
             client.close()
             usable_nodes.append(node['hostname'])
@@ -147,8 +149,9 @@ def refresh_usable_nodes_list(**kwargs):
             client = paramiko.client.SSHClient()
             client.load_system_host_keys()
             client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            client.connect(node['hostname'], key_filename=config_data['ssh_key'],
-                           username=config_data['slice_name'], timeout=3)
+            client.connect(node['hostname'],
+                    key_filename=config_data['planetlab_ssh_key'],
+                           username=config_data['planetlab_slice_name'], timeout=3)
             for k in kwargs:
                 typestr = str(type(kwargs[k]))
                 if 'function' in typestr or 'method' in typestr:
