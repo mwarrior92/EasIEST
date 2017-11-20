@@ -1,13 +1,14 @@
 import threading
 from time import sleep
-from ..helpers import mydir, format_dirpath
+from ..helpers import mydir, format_dirpath, top_dir
 import json
 
-with open(format_dirpath(mydir()+"../config.json"), 'r+') as f:
+with open(top_dir+"config.json", 'r+') as f:
     config_data = json.load(f)
 
 class SpinningCollector:
-    def __init__(self, meas_kwargs, retrieval_func, callback, spin_time=30):
+    def __init__(self, meas_kwargs, retrieval_func, callback, spin_time=30,
+            timeout=90):
         """
 
         :param meas_kwargs: (dict) will be used as input for retrieval_func
@@ -22,17 +23,24 @@ class SpinningCollector:
         self.spin_time = spin_time
         self.result = None
         self.err = None
+        self.filename = None
+        self.time_elapsed = 0
+        self.timeout = timeout
         self.grabber_thread = threading.Thread(target=self.get_result)
         self.grabber_thread.daemon = True
         self.grabber_thread.start()
 
     def get_result(self):
         while True:
-            self.result_obtained, self.result, self.err = self.retrieval_func(**self.meas_kwargs)
+            self.result_obtained, self.result, self.err, self.filename = self.retrieval_func(**self.meas_kwargs)
             if self.result_obtained:
                 self.callback(self)
                 return
+            elif self.time_elapsed >= self.timeout:
+                self.callback(self)
+                return
             else:
+                self.time_elapsed += self.spin_time
                 sleep(self.spin_time)
 
 
@@ -54,6 +62,7 @@ class TriggeredCollector:
         self.err = None
         self.result_obtained = False
         self.timeout = timeout
+        self.filename = None
         self.grabber_thread = threading.Thread(target=self.get_result)
         self.grabber_thread.daemon = True
         self.grabber_thread.start()
@@ -61,7 +70,7 @@ class TriggeredCollector:
     def get_result(self):
         self.trigger_event.wait(self.timeout)
         self.trigger_event.clear()
-        self.result_obtained, self.result, self.err = self.retrieval_func(self.meas_kwargs)
+        self.result_obtained, self.result, self.err, self.filename = self.retrieval_func(self.meas_kwargs)
         self.callback(self)
 
 

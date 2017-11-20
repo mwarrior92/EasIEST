@@ -3,6 +3,7 @@ import os
 import shutil
 import logging.config
 from ipwhois import IPWhois
+import datetime
 
 """
 NOTE: most of the helper functions are just to make main code less cluttered
@@ -232,3 +233,12 @@ class TimeoutError(BaseException):
 
 def timeout_handler(signum, frame):
     raise TimeoutError("timeout")
+
+
+def datestr(dt):
+    return dt.strftime("%Yy%mm%dd%Hh")
+
+
+def timestr(dt):
+    return str((dt - datetime.datetime(1970, 1, 1)).total_seconds())
+
