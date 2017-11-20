@@ -116,6 +116,9 @@ class TargetLocation(Extendable):
     """class for describing the set of required location constraints for client selection"""
 
     def __init__(self, **kwargs):
+        """
+        :param kwargs: coordinate_circle, countries, ipv[4/6]_subnet, v[4/6]_asns
+        """
         for k in kwargs:
             setattr(self, k, kwargs[k])
 
@@ -156,8 +159,11 @@ class TargetLocation(Extendable):
     def countries_contains(self, location):
         return location.get_country_code() in self.countries
 
-    def asns_contains(self, location):
-        return location.get_asn() in self.get('asns')
+    def v4_asns_contains(self, location):
+        return location.get_v4_asn() in self.get('v4_asns')
+
+    def v6_asns_contains(self, location):
+        return location.get_v6_asn() in self.get('v6_asns')
 
     def __contains__(self, location):
         if type(location) is Client:
