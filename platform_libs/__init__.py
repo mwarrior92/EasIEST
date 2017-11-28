@@ -1,2 +1,3 @@
 import planet_lab
-import ripe
+import ripe_atlas
+

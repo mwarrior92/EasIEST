@@ -1,12 +1,14 @@
 from ...helpers import Extendable
+from ... import platform_libs
 
 
 class MeasurementDescription(Extendable):
     """base container class for measurement descriptions"""
-    def __init__(self, **kwargs):
+    def __init__(self, label, **kwargs):
         """
         :param label: (str) a brief label to describe what this particular measurement is at a glance
         """
+        self.label = label
         for k in kwargs:
             self.set(k, kwargs[k])
 
@@ -29,6 +31,6 @@ class MeasurementDescription(Extendable):
     def get_label(self):
         return self.label
 
-    @staticmethod
-    def list_required_members():
-        return ["label", "measurement_type"]
+    def format_to_platform(self, platform):
+        pl = getattr(platform_libs, platform)
+        return pl.format_mdo(self)

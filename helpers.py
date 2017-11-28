@@ -133,6 +133,26 @@ def listfiles(parentdir, prefix="", containing="", suffix=""):
         return outlist
 
 
+def listdirs(parentdir, prefix="", containing="", suffix=""):
+    """
+    :param parentdir: (str) the directory from which you would like the dirs listed
+    :param prefix: (str) leading characters to match in returned dir names
+    :param containing: (str) substring to match in returned dir names
+    :param suffix: (str) trailing characters to match in returned dir names
+    :return: (list(str)) list of dir names from parentdir that meet the param
+    constraints
+    """
+    # return list of file names in parentdir;
+    # setting fullpath to True will give filenames with the direct/full path as
+    # a prefix
+    for root, dirs, files in os.walk(parentdir):
+        outlist = list()
+        for d in dirs:
+            if d.startswith(prefix) and containing in d and d.endswith(suffix):
+                outlist.append(d)
+        return outlist
+
+
 def remove(fname):
     """
     :param fname: (str) the name of the file to be removed
