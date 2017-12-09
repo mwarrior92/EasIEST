@@ -4,6 +4,7 @@ import shutil
 import logging.config
 from ipwhois import IPWhois
 import datetime
+import json
 
 """
 NOTE: most of the helper functions are just to make main code less cluttered
@@ -177,7 +178,16 @@ def remove(fname):
 ##############################################################
 
 
-class Extendable:
+def to_dict(item):
+    if hasattr(item, 'to_dict'):
+        return item.to_dict()
+    elif hasattr(item, '__iter__') and type(item) is not dict:
+        return [to_dict(z) for z in item]
+    else:
+        return item
+
+
+class Extendable(object):
     def get(self, member):
         """
         :param member: (str) name of member whose value should be returned
@@ -186,12 +196,12 @@ class Extendable:
         if hasattr(self, "get_"+member):
             return getattr(self, "get_"+member)()
         else:
-            return vars(self)[member]
+            return getattr(self, member)
 
     def set(self, member_name, val):
         """
 
-        :param member:
+        :param member_name:
         :param val:
         :return:
         """
@@ -199,6 +209,24 @@ class Extendable:
             getattr(self, "set_"+member_name)(val)
         else:
             setattr(self, member_name, val)
+
+    def to_dict(self):
+        members = [v for v in vars(self) if not callable(v) and not v.startswith('_')]
+        d = dict()
+        for m in members:
+            d[m] = to_dict(self.get(m))
+        d['CLASS'] = self.__class__.__name__
+        return d
+
+    def save_json(self, file_path=None):
+        if file_path is None:
+            if hasattr(self, 'file_path'):
+                file_path = self.get('file_path')
+            else:
+                raise ValueError('file_path must be defined')
+        data = self.to_dict()
+        with open(file_path, "w+") as f:
+            json.dump(data, f)
 
 ##############################################################
 #               NETWORKING CLASSES AND METHODS
@@ -261,4 +289,7 @@ def datestr(dt):
 
 def timestr(dt):
     return str((dt - datetime.datetime(1970, 1, 1)).total_seconds())
+
+def nowstr():
+    return datestr(datetime.datetime.utcnow())
 

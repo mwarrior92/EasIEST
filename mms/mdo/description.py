@@ -31,6 +31,3 @@ class MeasurementDescription(Extendable):
     def get_label(self):
         return self.label
 
-    def format_to_platform(self, platform):
-        pl = getattr(platform_libs, platform)
-        return pl.format_mdo(self)
