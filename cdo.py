@@ -5,6 +5,7 @@ from helpers import Extendable
 from helpers import asn_lookup
 from collections import defaultdict
 import random
+import platform_libs
 
 
 
@@ -117,6 +118,7 @@ class TargetLocation(Extendable):
 
     def __init__(self, **kwargs):
         """
+
         :param kwargs: coordinate_circle, countries, ipv[4/6]_subnet, v[4/6]_asns
         """
         for k in kwargs:
@@ -129,7 +131,7 @@ class TargetLocation(Extendable):
 
     def set_countries(self, countries):
         self.countries = list()
-        if type(countries) is not list or type(countries) is not tuple:
+        if not hasattr(countries, '__iter__'):
             raise ValueError("expected list of capitalized, 2 char country codes")
         for country in countries:
             if len(country) == 2 and country.isupper():
@@ -194,20 +196,14 @@ class TargetLocation(Extendable):
 
 
 class TargetClientGroup(Extendable):
-    def __init__(self, target_location, target_quantity=None, platforms=None, **kwargs):
+    def __init__(self, target_location, target_quantity=None, **kwargs):
         self.target_location = target_location
         self.target_quantity = target_quantity
-        self.platforms = platforms
         for k in kwargs:
             self.set(k, kwargs[k])
 
     def __contains__(self, client):
-        target_location = self.get('target_location')
-        platforms = self.get('platforms')
-        if platforms is not None:
-            if client.get['platform'] not in platforms:
-                return False
-        if client.location not in target_location:
+        if client.location not in self.target_location:
             return False
 
         # we only need to check the constraints that have actually been set for this target location
@@ -231,9 +227,14 @@ class TargetClientGroup(Extendable):
                 return False
         return True
 
+    def get_ClientGroup(self, platform):
+        pl = getattr(platform_libs, platform)
+        cg = getattr(pl, "get_TargetLocation_clients")(self.target_location)
+        return ClientGroup(cg.random_sample(self.target_quantity))
 
 
-class ClientGroup:
+
+class ClientGroup(Extendable):
     """base class for a group of clients that will perform measurements"""
     def __init__(self, clients=None):
         if type(clients) is list:
