@@ -1,6 +1,7 @@
 # Measurement Result Object (MRO)
 from ..helpers import Extendable
-import json
+import dns.message
+import base64
 
 class PingResult(Extendable):
     def __init__(self, **kwargs):
@@ -61,3 +62,52 @@ class PingSetResults(Extendable):
 
     def append(self, result):
         self.ping_results.append(result)
+
+
+rr_types = {1: 'A', 2: 'NS', 5: 'CNAME', 15: 'MX', 28: 'AAAA'}
+
+
+class DNSResult(Extendable):
+    def __init__(self, **kwargs):
+        self.label = None
+        self.platform = None
+        self.meas_type = 'dns'
+        self.query_domain = None
+        self.query_type = None
+        self.protocol = None
+        self.local_resolver = None
+        self.target_resolver = None
+        self.answers = dict()
+        self.raw_response = None
+        self.timestamp = None
+        self.src_name = None
+        self.src_addr = None
+
+        for k in kwargs:
+            self.set(k, kwargs[k])
+
+    def extract_answers(self):
+        msg = dns.message.from_wire(base64.b64decode(self.raw_response))
+        if hasattr(msg, 'answer'):
+            self.answers = dict()
+            for ans in msg.answer:
+                rr_type = rr_types[ans.rdtype]
+                self.answers[rr_type] = list()
+                for item in ans.items:
+                    self.answers[rr_type].append(item.to_text())
+
+
+class ResultSet(Extendable):
+    def __init__(self, **kwargs):
+        self.results = list()
+        self.raw_file_path = None
+        self.file_path = None
+        self.label = None
+        self.platform = None
+        self.meas_type = None
+        for k in kwargs:
+            self.set(k, kwargs[k])
+
+    def append(self, result):
+        self.results.append(result)
+

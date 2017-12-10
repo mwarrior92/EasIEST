@@ -1,0 +1,18 @@
+{
+  "group_id": 0,
+  "af": 0,
+  "is_oneoff": false,
+  "is_public": false,
+  "description": "",
+  "spread": 0,
+  "resolve_on_probe": false,
+  "start_time": "",
+  "stop_time": "",
+  "type": "",
+  "interval": 0,
+  "packets": 0,
+  "size": 0,
+  "packet_interval": 0,
+  "include_probe_id": false,
+  "target": ""
+}
