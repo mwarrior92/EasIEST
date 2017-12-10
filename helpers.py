@@ -210,21 +210,23 @@ class Extendable(object):
         else:
             setattr(self, member_name, val)
 
-    def to_dict(self):
+    def to_dict(self, skip_nones=True):
         members = [v for v in vars(self) if not callable(v) and not v.startswith('_')]
         d = dict()
         for m in members:
-            d[m] = to_dict(self.get(m))
+            tmp = to_dict(self.get(m))
+            if tmp is not None and skip_nones: # skip None entries to save space
+                d[m] = to_dict(self.get(m))
         d['CLASS'] = self.__class__.__name__
         return d
 
-    def save_json(self, file_path=None):
+    def save_json(self, file_path=None, skip_nones=True):
         if file_path is None:
             if hasattr(self, 'file_path'):
                 file_path = self.get('file_path')
             else:
                 raise ValueError('file_path must be defined')
-        data = self.to_dict()
+        data = self.to_dict(skip_nones)
         with open(file_path, "w+") as f:
             json.dump(data, f)
 
