@@ -118,6 +118,9 @@ class TriggeredCollector(Extendable):
         self.callback(self)
 
 
-def wait_on_collectors(collectors, timeout=300):
+def wait_on_collectors(collectors, timeout=None):
     for collector in collectors:
-        collector.grabber_thread.join(timeout)
+        if timeout is None:
+            collector.grabber_thread.join()
+        else:
+            collector.grabber_thread.join(timeout)

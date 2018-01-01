@@ -7,6 +7,9 @@ from ...cdo import Client, ClientGroup, Location
 import datetime
 from ra_mro import PingResult, DNSResult
 from ...mms.mro import PingSetResults, ResultSet
+from collections import defaultdict
+from copy import deepcopy
+from time import sleep
 
 with open(top_dir+'config.json', 'r+') as f:
     config_data = json.load(f)
@@ -329,38 +332,66 @@ def ping_retrieval_func(collector):
 
 
 def dns_retrieval_func(collector):
-    states = list()
-    allresults = list()
-    errs = list()
+    allresults = dict()
     probe_ids = collector.measro.get('probe_ids')
     raw_file_path = collector.measro.get('raw_file_path')
-    for msm_id in collector.measro.get('running_msm_ids'):
-        kwargs = {
-            'msm_id': msm_id,
-            'probe_ids': probe_ids
-        }
-        is_success, results = rac.AtlasResultsRequest(**kwargs).create()
-        meas = rac.Measurement(id=msm_id)
-        if meas.status_id in range(5, 8):   # give up if there was an error
-            states.append(True)
-            allresults.append(None)
-            errs.append(results)
-        elif len(results) == len(probe_ids):    # finish if all results have been obtained
-            states.append(True)
-            allresults.append(results)
-            errs.append(None)
+    all_ids = collector.measro.get('running_msm_ids')
+    running_msm_ids = set(deepcopy(all_ids))
+    attempts = defaultdict(int)
+    max_attempts = max([1, (collector.timeout / collector.spin_time)])
+    things_left = len(running_msm_ids)
+    while things_left > 0:
+        for msm_id in all_ids:
+            if msm_id in running_msm_ids:
+                attempts[msm_id] += 1
+                kwargs = {
+                    'msm_id': msm_id,
+                    'probe_ids': probe_ids
+                }
+                is_success, results = rac.AtlasResultsRequest(**kwargs).create()
+                if attempts[msm_id] < max_attempts:
+                    meas = rac.Measurement(id=msm_id)
+                    if meas.status_id in range(5, 8):  # give up if there was an error
+                        running_msm_ids.remove(msm_id)  # we don't need to check it again if it's err'd
+                        allresults[msm_id] = {
+                            'result':None,
+                            'err': results
+                        }
+                    elif len(results) == len(probe_ids):  # finish if all results have been obtained
+                        running_msm_ids.remove(msm_id)  # we don't need to check it again if it's done
+                        allresults[msm_id] = {
+                            'result': results,
+                            'err': None
+                        }
+                    else:
+                        allresults[msm_id] = {
+                            'result': results,
+                            'err': None
+                        }
+                else:
+                    running_msm_ids.remove(msm_id)  # if we've made the max attempts, give up
+                    allresults[msm_id] = {
+                        'result': results,
+                        'err': None
+                    }
+        things_left = len(running_msm_ids)
+        if things_left > 0:
+            collector.time_elapsed += collector.spin_time
+            sleep(collector.spin_time)
+
+    # format for output to collector
+    res = list()
+    errs = list()
+    for msm_id in all_ids:
+        if msm_id in allresults:
+            res.append(allresults[msm_id]['result'])
+            errs.append(allresults[msm_id]['err'])
         else:
-            states.append(False)
-            allresults.append(results)
-            errs.append(None)
-
+            res.append(None)
+            errs.append({'err': 'no result...'})
     with open(raw_file_path, "w+") as f:
-        json.dump(allresults, f)
-
-    if all(states):
-        return True, allresults, errs
-    else:
-        return False, allresults, errs
+        json.dump(res, f)
+    return True, res, errs
 
 
 def ping_callback(collector):

@@ -8,7 +8,6 @@ import random
 import platform_libs
 
 
-
 class Location(Extendable):
     """base class for a client's location"""
 
@@ -20,8 +19,7 @@ class Location(Extendable):
     infer_asn = True
 
     def __init__(self, **kwargs):
-        if self.infer_country_code or self.infer_coordinates:
-            self.inferences = list()
+        self.inferences = list()
         for k in kwargs:
             self.set(k, kwargs[k])
 
@@ -107,10 +105,30 @@ class Location(Extendable):
 class Client(Extendable):
     """base class for a client that will perform measurements"""
     def __init__(self, platform, location, **kwargs):
-        self.platform = platform
-        self.location = location
+        self.platform = None
+        self.location = None
+        self.set("location", location)
+        self.set("platform", platform)
         for k in kwargs:
-            setattr(self, k, kwargs[k])
+            self.set(k, kwargs[k])
+
+    def set_location(self, loc):
+        if type(loc) is dict:
+            self.location = Location(**loc)
+        else:
+            self.location = loc
+
+    def get(self, member):
+        """
+                :param member: (str) name of member whose value should be returned
+                :return:
+                """
+        if hasattr(self, "get_" + member):
+            return getattr(self, "get_" + member)()
+        elif hasattr(self, member):
+            return getattr(self, member)
+        else:
+            return self.location.get(member)  # added this to avoid abstraction confusion
 
 
 class TargetLocation(Extendable):
@@ -273,3 +291,12 @@ class ClientGroup(Extendable):
     def __iter__(self):
         for client in self.clients:
             yield client
+
+    def set_clients(self, clients):
+        for c in clients:
+            if type(c) is dict:
+                self.add_client(Client(**c))
+            else:
+                self.add_client(c)
+
+
