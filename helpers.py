@@ -184,7 +184,12 @@ def to_dict(item):
     elif hasattr(item, '__iter__') and type(item) is not dict:
         return [to_dict(z) for z in item]
     else:
-        return item
+        # catch for objects I didn't make that need to be transformed into a str first
+        try:
+            _ = json.dumps({"entry": item})
+            return item
+        except:
+            return str(item)
 
 
 class Extendable(object):
@@ -229,6 +234,12 @@ class Extendable(object):
         data = self.to_dict(skip_nones)
         with open(file_path, "w+") as f:
             json.dump(data, f)
+
+    def load_json(self, file_path):
+        with open(file_path, "r+") as f:
+            d = json.load(f)
+        for k in d:
+            self.set(k, d[k])
 
 ##############################################################
 #               NETWORKING CLASSES AND METHODS

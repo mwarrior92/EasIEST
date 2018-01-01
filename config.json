@@ -1,0 +1,11 @@
+{
+  "data_path": "",
+
+  "planetlab_username": "",
+  "planetlab_slice_name": "",
+  "planetlab_ssh_key": "",
+
+  "ripeatlas_schedule_meas_key": "",
+  "ripeatlas_list_meas_key": "",
+  "ripeatlas_stop_meas_key": ""
+}
