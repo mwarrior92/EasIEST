@@ -5,6 +5,8 @@ import logging.config
 from ipwhois import IPWhois
 import datetime
 import json
+import tarfile
+import subprocess
 
 """
 NOTE: most of the helper functions are just to make main code less cluttered
@@ -38,6 +40,45 @@ logger.debug("top directory level set to: "+top_dir)
 ##############################################################
 #                        FILE I/O
 ##############################################################
+
+
+def isfile(fname):
+    # wrapper for checking to see if a file fname exists
+    return os.path.isfile(fname)
+
+
+def fix_ownership(path):
+    # Change the owner of the file to SUDO_UID
+    uid = os.environ.get('SUDO_UID')
+    gid = os.environ.get('SUDO_GID')
+    if uid is not None:
+        os.chown(path, int(uid), int(gid))
+        logger.debug("updated ownership of "+path)
+
+
+def untar(fname, dst):
+    tar = tarfile.open(fname)
+    tar.extractall(path=dst)
+    tar.close()
+    fix_ownership(dst)
+
+
+def make_tarfile(output_filename, source_dir):
+    try:
+        tar = tarfile.open(output_filename, "w:gz")
+        try:
+            tar.add(source_dir, arcname=os.path.basename(source_dir))
+        except:
+            logger.error("failed to make "+output_filename+" from "+source_dir)
+    except IOError:
+        logger.error("IOError: failed to make "+output_filename+" from "+source_dir)
+    finally:
+        tar.close()
+    try:
+        fix_ownership(output_filename)
+    except:
+        pass
+    logger.debug("made tar ball named "+output_filename)
 
 
 def overwrite(path, content):
@@ -306,3 +347,16 @@ def timestr(dt):
 def nowstr():
     return datestr(datetime.datetime.utcnow())
 
+
+########### OTHER
+
+
+def terminal(command):
+    '''
+    :return: (stdoutdata, stderrdata)
+    '''
+    # run terminal commands with subprocess
+    print(command)
+    p = subprocess.Popen(command, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, shell=True)
+    return p.communicate()
