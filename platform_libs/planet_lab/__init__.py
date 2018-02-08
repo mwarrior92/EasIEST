@@ -11,6 +11,7 @@ from ...helpers import isfile
 import json
 import getpass
 import paramiko
+import threading
 
 
 ##############################################################
@@ -138,10 +139,10 @@ def setup_python(client, **kwargs):
             sudo yum -y install make --nogpgcheck; make; make install; \
             export PATH=$HOME/local/bin:$PATH; \
             export LD_LIBRARY_PATH=$HOME/local/lib:$LD_LIBRARY_PATH; \
+            echo \"export PATH=$HOME/local/bin:$PATH\" >> ~/.bashrc; \
+            echo \"export LD_LIBRARY_PATH=$HOME/local/lib:$LD_LIBRARY_PATH\" >> ~/.bashrc; \
             python2.7 -m pip install --upgrade pip; \
-            python2.7 -m pip install --upgrade setuptools; \
-            sudo yum -y install curl-devel --nogpgcheck; \
-            python2.7 -m pip install pycurl==7.18.2"]
+            python2.7 -m pip install --upgrade setuptools"]
     for cmd in steps:
         stdin, stdout, stderr = client.exec_command(cmd, timeout=3600)
         tmp = stdout.read()
@@ -175,6 +176,8 @@ def execute_cmd(client, cmd, **kwargs):
     tmp = stdout.read()
     tmp += stderr.read()
     print tmp
+    if len(tmp) > 50:
+        raise RuntimeError
 
 
 def push_dir(client, node_hostname, pushdir, local_overwrite_tar=False,
@@ -209,31 +212,55 @@ def setup_golang():
     pass
 
 
-def setup_nodes(auth, setup_methods=[setup_python], max_nodes=0, **kwargs):
+def worker_thread(node, setup_methods,  **kwargs):
+    logger.warning("connecting..."+node['hostname'])
+    client = None
+    try:
+        client = connect_client(node['hostname'])
+        print "connected!"
+        for i, m in enumerate(setup_methods):
+            logger.warning("calling"+str(i))
+            m(client=client, node_hostname=node['hostname'], **kwargs)
+        tlock.acquire()
+        usable_nodes.append(node['hostname'])
+        tlock.release()
+    except Exception as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        traceback.print_exception(exc_type, exc_value, exc_traceback,
+                                              limit=2, file=sys.stdout)
+        logger.error(str(e))
+        tlock.acquire()
+        bad_nodes.append((node['hostname'], str(e)))
+        tlock.release()
+        print node['hostname'], "D:"
+        logger.error("failed to set up "+node['hostname'])
+    finally:
+        if client is not None:
+            client.close()
+        tevent.set()
+
+
+def setup_nodes(auth, setup_methods=[setup_python], max_nodes=0,
+        max_threads=5, **kwargs):
     my_nodes = get_usable_nodes()
+    global usable_nodes
     usable_nodes = list()
+    global bad_nodes
     bad_nodes = list()
+    global tlock
+    tlock = threading.Lock()
+    global tevent
+    tevent = threading.Event()
     for node in my_nodes:
-        logger.warning("connecting..."+node['hostname'])
-        client = None
-        try:
-            client = connect_client(node['hostname'])
-            print "connected!"
-            for i, m in enumerate(setup_methods):
-                logger.warning("calling"+str(i))
-                m(client=client, node_hostname=node['hostname'], **kwargs)
-            usable_nodes.append(node['hostname'])
-        except Exception as e:
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            traceback.print_exception(exc_type, exc_value, exc_traceback,
-                                                  limit=2, file=sys.stdout)
-            logger.error(str(e))
-            bad_nodes.append((node['hostname'], str(e)))
-        finally:
-            if client is not None:
-                client.close()
         if max_nodes > 0 and len(usable_nodes) >= max_nodes:
             break
+        if threading.active_count() >= max_threads:
+            tevent.wait()
+            tevent.clear()
+        thread = threading.Thread(target=worker_thread, args=(node,
+            setup_methods), kwargs=kwargs)
+        thread.daemon = True
+        thread.start()
 
     with open(state_data_path+'successful_setup_nodes.json', 'w+') as f:
         json.dump(usable_nodes, f)
