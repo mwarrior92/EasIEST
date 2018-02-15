@@ -74,7 +74,6 @@ def add_booted_nodes(auth, **kwargs):
     new_booted_nodes = [n for n in nodes if n['boot_state'] == 'boot' and slice_id not in n['slice_ids']]
     nbn = list()
     states = set([n['boot_state'] for n in new_booted_nodes])
-    print states
     for n in new_booted_nodes:
         nbn.append(n['node_id'])
         if 'allowed_val_sets' in kwargs:
@@ -111,7 +110,7 @@ def drop_dead_nodes(auth, **kwargs):
     slice_id = get_slice_id(auth, **kwargs)
     nodes = get_nodes_list()
     old_dead_nodes = [n for n in nodes if n['boot_state'] != 'boot' and slice_id in n['slice_ids']]
-    print len(old_dead_nodes)
+    logger.debug("# old dead nodes: "+str(len(old_dead_nodes)))
     api_server.DeleteSliceToNodes(auth, slice_id, old_dead_nodes)
 
 
@@ -123,11 +122,11 @@ def setup_python(client, **kwargs):
     stdin, stdout, stderr = client.exec_command("python2.7 -V", timeout=10)
     stdoutdata = stdout.read()
     stdoutdata += stderr.read()
-    print "checking for python installation..."
+    logger.debug("checking for python installation...")
     if "2.7.12" in stdoutdata:
-        print "already installed, moving on..."
+        logger.debug("already installed, moving on...")
         return
-    print "installing python..."
+    logger.debug("installing python...")
     steps = ["sudo rm -r ./*; mkdir local; cd local; wget \
             https://www.python.org/ftp/python/2.7.12/Python-2.7.12.tgz; \
             sudo rm Python-2.7.12/ -r; tar -xzvf Python-2.7.12.tgz; \
@@ -147,7 +146,7 @@ def setup_python(client, **kwargs):
         stdin, stdout, stderr = client.exec_command(cmd, timeout=3600)
         tmp = stdout.read()
         tmp += stderr.read()
-        print tmp
+        logger.debug("stdout/err: "+tmp)
 
 
 def setup_curl(client, **kwargs):
@@ -171,17 +170,17 @@ def setup_sudoers(client, **kwargs):
         _ = stdout.read()
 
 
-def execute_cmd(client, cmd, **kwargs):
-    stdin, stdout, stderr = client.exec_command(cmd, timeout=60)
+def execute_cmd(client, cmd, longouts=False, timeout=60, **kwargs):
+    stdin, stdout, stderr = client.exec_command(cmd, timeout=timeout)
     tmp = stdout.read()
     tmp += stderr.read()
-    print tmp
-    if len(tmp) > 50:
+    logger.debug("stdout/err: "+tmp)
+    if len(tmp) > 50 and not longouts:
         raise RuntimeError
 
 
 def push_dir(client, node_hostname, pushdir, local_overwrite_tar=False,
-        remote_overwrite=False, **kwargs):
+        remote_overwrite=False, destdir="", **kwargs):
     '''
     # uploads a file to a node via scp
     '''
@@ -192,8 +191,8 @@ def push_dir(client, node_hostname, pushdir, local_overwrite_tar=False,
 
     filepath = tmp_path+filename
     # save work here if it's already been tarballed
-    print not isfile(filepath)
     if local_overwrite_tar or not isfile(filepath):
+        logger.debug("overwriting "+filepath)
         make_tarfile(filepath, pushdir)
     stdin, stdout, stderr = client.exec_command("ls", timeout=20)
     stdoutdata = stdout.read()
@@ -201,9 +200,28 @@ def push_dir(client, node_hostname, pushdir, local_overwrite_tar=False,
     # save work if it's already been uploaded
     if filename not in stdoutdata or remote_overwrite:
         tmp = terminal(" ".join(['scp', '-i', config_data['planetlab_ssh_key'], filepath,
-            config_data['planetlab_slice_name']+'@'+node_hostname+':']))
+            config_data['planetlab_slice_name']+'@'+node_hostname+':'+destdir]))
         logger.debug("\n".join(tmp))
     stdin, stdout, stderr = client.exec_command("tar -xzf "+filename, timeout=120)
+    tmp = stdout.read()
+    logger.debug(tmp)
+
+
+def push_file(client, node_hostname, pushfile, local_overwrite_tar=False,
+        remote_overwrite=False, destdir="", **kwargs):
+    '''
+    # uploads a file to a node via scp
+    '''
+    stdin, stdout, stderr = client.exec_command("ls "+destdir, timeout=20)
+    stdoutdata = stdout.read()
+    stdoutdata += stderr.read()
+    # save work if it's already been uploaded
+    if pushfile not in stdoutdata or remote_overwrite:
+        tmp = terminal(" ".join(['scp', '-i', config_data['planetlab_ssh_key'],
+            pushfile,
+            config_data['planetlab_slice_name']+'@'+node_hostname+':'+destdir]))
+        logger.debug("\n".join(tmp))
+    stdin, stdout, stderr = client.exec_command("tar -xzf "+pushfile, timeout=120)
     tmp = stdout.read()
     logger.debug(tmp)
 
@@ -212,14 +230,54 @@ def setup_golang():
     pass
 
 
+def command_node(hostname, cmd, longouts=True, **kwargs):
+    logger.debug("connecting..."+hostname)
+    client = None
+    success = False
+    try:
+        client = connect_client(hostname)
+        logger.debug("connected!")
+        execute_cmd(client=client, cmd=cmd, node_hostname=hostname,
+                longouts=longouts, **kwargs)
+        success = True
+    except Exception as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        traceback.print_exception(exc_type, exc_value, exc_traceback,
+                                              limit=2, file=sys.stdout)
+        logger.error(str(e)+" Failed to command "+hostname)
+    finally:
+        if client is not None:
+            client.close()
+    return success
+
+
+def get_node_ip(hostname, **kwargs):
+    logger.debug("connecting..."+hostname)
+    client = None
+    ip = None
+    try:
+        client = connect_client(hostname)
+        logger.debug("connected!")
+        ip = client.get_transport().getpeername()[0]
+    except Exception as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        traceback.print_exception(exc_type, exc_value, exc_traceback,
+                                              limit=2, file=sys.stdout)
+        logger.error(str(e)+" Failed to get IP from  "+hostname)
+    finally:
+        if client is not None:
+            client.close()
+    return ip
+
+
 def worker_thread(node, setup_methods,  **kwargs):
-    logger.warning("connecting..."+node['hostname'])
+    logger.debug("connecting..."+node['hostname'])
     client = None
     try:
         client = connect_client(node['hostname'])
-        print "connected!"
+        logger.debug("connected!")
         for i, m in enumerate(setup_methods):
-            logger.warning("calling"+str(i))
+            logger.debug("calling"+str(i))
             m(client=client, node_hostname=node['hostname'], **kwargs)
         tlock.acquire()
         usable_nodes.append(node['hostname'])
@@ -232,7 +290,6 @@ def worker_thread(node, setup_methods,  **kwargs):
         tlock.acquire()
         bad_nodes.append((node['hostname'], str(e)))
         tlock.release()
-        print node['hostname'], "D:"
         logger.error("failed to set up "+node['hostname'])
     finally:
         if client is not None:
@@ -303,17 +360,18 @@ def refresh_usable_nodes_list(**kwargs):
     bad_nodes = list()
     count = 0
     for node in my_nodes:
-        print node['hostname']
+        logger.debug("checking " +node['hostname'])
         try:
             client = connect_client(node['hostname'])
-            for k in kwargs:
-                typestr = str(type(kwargs[k]))
-                if 'function' in typestr or 'method' in typestr:
-                    kwargs[k](client=client, node=node)
-            client.close()
+            client.exec_command("ls")
             usable_nodes.append(node)
         except Exception as e:
             bad_nodes.append((node, str(e)))
+        finally:
+            try:
+                client.close()
+            except:
+                pass
         if count % 20 == 0:
             with open(state_data_path+'usable_nodes.json', 'w+') as f:
                 json.dump(usable_nodes, f)
@@ -326,6 +384,13 @@ def refresh_usable_nodes_list(**kwargs):
 
 def get_usable_nodes():
     with open(state_data_path+'usable_nodes.json', 'r+') as f:
+        nodes = json.load(f)
+    return nodes
+
+
+def get_nodes():
+    nodes = list()
+    with open(state_data_path + "successful_setup_nodes.json", 'r+') as f:
         nodes = json.load(f)
     return nodes
 
@@ -349,6 +414,7 @@ def get_failed_setup_nodes():
 
 
 def drop_bad_nodes(auth, unusable=True, failed_setup=True, **kwargs):
+    # TODO fix this?
     slice_id = get_slice_id(auth, **kwargs)
     nodes = list()
     if unusable:
