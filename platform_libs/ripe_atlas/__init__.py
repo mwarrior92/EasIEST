@@ -257,11 +257,15 @@ def launch_measurement(probe_ids, measurement, **kwargs):
     is_success, response = send_request(probe_ids, measurement, **kwargs)
     if is_success:
         logger.debug("deployed meas: "+str(response['measurements'][0]))
-        return is_success, response
+        return is_success, False, response
     else:
         logger.warning("failed to deploy: "+str(measurement)+"; "+str(response))
         print str(measurement[0])
-        return False, {}
+        if "more than" in json.dumps(response) or "more than" in \
+            str(measurement[0]):
+                return False, True, {}
+
+        return False, False, {}
 
 
 def dispatch_measurement(clients, measdo, **kwargs):
@@ -277,8 +281,9 @@ def dispatch_measurement(clients, measdo, **kwargs):
                         target_resolver=measdo.get('target_resolver'), **kwargs)
 
     probe_ids = clients_to_probe_ids(clients)
-    print probe_ids
-    is_success, response = launch_measurement(probe_ids, measurement)
+    # print probe_ids
+    is_success, slowdown, response = launch_measurement(probe_ids, measurement)
+    res.set('slow_down', slowdown)
     res.set('is_success', is_success)
     if is_success:
         res.set('msm_ids', response['measurements'])
@@ -294,41 +299,66 @@ def dispatch_measurement(clients, measdo, **kwargs):
 
 
 def ping_retrieval_func(collector):
-    states = list()
-    allresults = list()
-    errs = list()
+    allresults = dict()
     probe_ids = collector.measro.get('probe_ids')
     raw_file_path = collector.measro.get('raw_file_path')
-    running_msm_ids = collector.measro.get('running_msm_ids')
-    for msm_id in running_msm_ids:
-        kwargs = {
-            'msm_id': msm_id,
-            'probe_ids': probe_ids
-        }
-        is_success, results = rac.AtlasResultsRequest(**kwargs).create()
-        meas = rac.Measurement(id=msm_id)
-        if meas.status_id in range(5, 8):   # give up if there was an error
-            states.append(True)
-            allresults.append(None)
-            errs.append(results)
-        elif len(results) == len(probe_ids):    # finish if all results have been obtained
-            states.append(True)
-            allresults.append(results)
-            errs.append(None)
+    all_ids = collector.measro.get('running_msm_ids')
+    running_msm_ids = set(deepcopy(all_ids))
+    attempts = defaultdict(int)
+    max_attempts = max([1, (collector.timeout / collector.spin_time)])
+    things_left = len(running_msm_ids)
+    while things_left > 0:
+        for msm_id in all_ids:
+            if msm_id in running_msm_ids:
+                attempts[msm_id] += 1
+                kwargs = {
+                    'msm_id': msm_id,
+                    'probe_ids': probe_ids
+                }
+                is_success, results = rac.AtlasResultsRequest(**kwargs).create()
+                if attempts[msm_id] < max_attempts:
+                    meas = rac.Measurement(id=msm_id)
+                    if meas.status_id in range(5, 8):  # give up if there was an error
+                        running_msm_ids.remove(msm_id)  # we don't need to check it again if it's err'd
+                        allresults[msm_id] = {
+                            'result':None,
+                            'err': results
+                        }
+                    elif len(results) == len(probe_ids):  # finish if all results have been obtained
+                        running_msm_ids.remove(msm_id)  # we don't need to check it again if it's done
+                        allresults[msm_id] = {
+                            'result': results,
+                            'err': None
+                        }
+                    else:
+                        allresults[msm_id] = {
+                            'result': results,
+                            'err': None
+                        }
+                else:
+                    running_msm_ids.remove(msm_id)  # if we've made the max attempts, give up
+                    allresults[msm_id] = {
+                        'result': results,
+                        'err': None
+                    }
+        things_left = len(running_msm_ids)
+        if things_left > 0:
+            collector.time_elapsed += collector.spin_time
+            sleep(collector.spin_time)
+
+    # format for output to collector
+    res = list()
+    errs = list()
+    for msm_id in all_ids:
+        if msm_id in allresults:
+            res.append(allresults[msm_id]['result'])
+            errs.append(allresults[msm_id]['err'])
         else:
-            states.append(False)
-            allresults.append(results)
-            errs.append(None)
-
+            res.append(None)
+            errs.append({'err': 'no result...'})
     with open(raw_file_path, "w+") as f:
-        json.dump(allresults, f)
-
-    if all(states):
-        return True, allresults, None
-    else:
-        # don't keep checking measurements that are totally done
-        collector.measro.set('running_msm_ids', [m for m, s in zip(running_msm_ids, states) if not s])
-        return False, allresults, None
+        json.dump(res, f)
+    return True, res, errs
 
 
 def dns_retrieval_func(collector):

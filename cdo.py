@@ -248,7 +248,10 @@ class TargetClientGroup(Extendable):
     def get_ClientGroup(self, platform):
         pl = getattr(platform_libs, platform)
         cg = getattr(pl, "get_TargetLocation_clients")(self.target_location)
-        return ClientGroup(cg.random_sample(self.target_quantity))
+        if self.target_quantity is not None:
+            return ClientGroup(cg.random_sample(self.target_quantity))
+        else:
+            return cg
 
 
 
@@ -298,5 +301,14 @@ class ClientGroup(Extendable):
                 self.add_client(Client(**c))
             else:
                 self.add_client(c)
+
+    def get_probe_ids(self):
+        return [z.get('probe_id') for z in self.get('clients')]
+
+    def intersection(self, cg2):
+        ids1 = self.get('probe_ids')
+        ids2 = cg2.get('probe_ids')
+        overlap = set(ids1).intersection(ids2)
+        return [z.get('probe_id') for z in self.get('clients') if z.get('probe_id') not in overlap]
 
 

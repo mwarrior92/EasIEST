@@ -12,7 +12,7 @@ class PingResult(Extendable):
         self.local_addr = None # str
         self.src_addr = None # str
         self.src_name = None # str
-        self.rtt_list = None # list(float)
+        self.rtt_list = list() # list(float)
         self.num_sent = None # int
         self.num_returned = None # int
         self.label = None # str

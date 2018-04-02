@@ -12,7 +12,10 @@ class PingResult(mro.PingResult):
     def set_result(self, results):
         self.rtt_list = list()
         for res in results:
-            self.rtt_list.append(res['rtt'])
+            try:
+                self.rtt_list.append(res['rtt'])
+            except KeyError:
+                self.rtt_list.append(res)
 
     def set_sent(self, count):
         self.num_sent = count
