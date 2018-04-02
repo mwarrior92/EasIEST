@@ -290,7 +290,22 @@ def dispatch_measurement(clients, measdo, **kwargs):
         res.set('running_msm_ids', response['measurements'])
         res.set('probe_ids', probe_ids)
     print response
-    return res
+    if slowdown:
+        while slowdown:
+            active = 1
+            try:
+                active = get_active_count()
+            except:
+                logger.error("failed obtaining active measurement count...")
+                pass
+            if active == 0:
+                slowdown = False
+                break
+            else:
+                sleep(60)
+        return dispatch_measurement(clients, measdo, **kwargs)
+    else:
+        return res
 
 
 ##############################################################################
@@ -450,5 +465,18 @@ def format_ping_result(raw_ping_data):
 
 def format_dns_result(rawdat):
     return DNSResult(platform='ripe_atlas', **rawdat)
+
+
+def get_active_count(**kwargs):
+    if 'key' not in kwargs:
+        kwargs['key'] = config_data['ripeatlas_schedule_meas_key']
+    url_path = '/api/v2/measurements/my/?key='+mykey+'&status=1,2'
+    request = rac.AtlasRequest(**{"url_path": url_path})
+    is_success, results = request.get()
+    if is_success:
+        return results['count']
+    else:
+        print results, mykey
+        return -1
 
 

@@ -178,17 +178,10 @@ class TargetLocation(Extendable):
 
     def countries_contains(self, location):
         return location.get_country_code() in self.countries
-<<<<<<< HEAD
 
     def v4_asns_contains(self, location):
         return location.get_v4_asn() in self.get('v4_asns')
 
-=======
-
-    def v4_asns_contains(self, location):
-        return location.get_v4_asn() in self.get('v4_asns')
-
->>>>>>> a53601e7c4a3c585c3b6435788d2f92c03ded655
     def v6_asns_contains(self, location):
         return location.get_v6_asn() in self.get('v6_asns')
 
@@ -255,14 +248,10 @@ class TargetClientGroup(Extendable):
     def get_ClientGroup(self, platform):
         pl = getattr(platform_libs, platform)
         cg = getattr(pl, "get_TargetLocation_clients")(self.target_location)
-<<<<<<< HEAD
         if self.target_quantity is not None:
             return ClientGroup(cg.random_sample(self.target_quantity))
         else:
             return cg
-=======
-        return ClientGroup(cg.random_sample(self.target_quantity))
->>>>>>> a53601e7c4a3c585c3b6435788d2f92c03ded655
 
 
 
@@ -313,7 +302,6 @@ class ClientGroup(Extendable):
             else:
                 self.add_client(c)
 
-<<<<<<< HEAD
     def get_probe_ids(self):
         return [z.get('probe_id') for z in self.get('clients')]
 
@@ -322,7 +310,4 @@ class ClientGroup(Extendable):
         ids2 = cg2.get('probe_ids')
         overlap = set(ids1).intersection(ids2)
         return [z.get('probe_id') for z in self.get('clients') if z.get('probe_id') not in overlap]
-
-=======
->>>>>>> a53601e7c4a3c585c3b6435788d2f92c03ded655
 
