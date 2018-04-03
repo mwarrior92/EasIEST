@@ -291,12 +291,15 @@ def dispatch_measurement(clients, measdo, **kwargs):
         res.set('probe_ids', probe_ids)
     print response
     if slowdown:
+        print("waiting for active to finish...")
+        active = 1
         while slowdown:
-            active = 1
+            print("...")
             try:
                 active = get_active_count()
-            except:
-                logger.error("failed obtaining active measurement count...")
+            except Exception as e:
+                logger.error("failed obtaining active measurement \
+                        count..."+str(e))
                 pass
             if active == 0:
                 slowdown = False
@@ -467,9 +470,9 @@ def format_dns_result(rawdat):
     return DNSResult(platform='ripe_atlas', **rawdat)
 
 
-def get_active_count(**kwargs):
-    if 'key' not in kwargs:
-        kwargs['key'] = config_data['ripeatlas_schedule_meas_key']
+def get_active_count(mykey=None):
+    if mykey is None:
+        mykey = config_data['ripeatlas_schedule_meas_key']
     url_path = '/api/v2/measurements/my/?key='+mykey+'&status=1,2'
     request = rac.AtlasRequest(**{"url_path": url_path})
     is_success, results = request.get()
