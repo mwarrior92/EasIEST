@@ -254,18 +254,53 @@ def send_request(probe_ids, measurement, **kwargs):
 
 
 def launch_measurement(probe_ids, measurement, **kwargs):
-    is_success, response = send_request(probe_ids, measurement, **kwargs)
-    if is_success:
-        logger.debug("deployed meas: "+str(response['measurements'][0]))
-        return is_success, False, response
-    else:
-        logger.warning("failed to deploy: "+str(measurement)+"; "+str(response))
-        print str(measurement[0])
-        if "more than" in json.dumps(response) or "more than" in \
-            str(measurement[0]):
-                return False, True, {}
+    if len(probe_ids) * len(measurement) < 50:
+        is_success, response = send_request(probe_ids, measurement, **kwargs)
+        if is_success:
+            logger.debug("deployed meas: "+str(response['measurements'][0]))
+            return is_success, False, response
+        else:
+            logger.warning("failed to deploy: "+str(measurement)+"; "+str(response))
+            print str(measurement[0])
+            if "more than" in json.dumps(response) or "more than" in \
+                str(measurement[0]):
+                    return False, True, {}
 
-        return False, False, {}
+            return False, False, {}
+    else:
+        msms = deepcopy(measurement)
+        responses = list()
+        mpos = defaultdict(int)
+        while any([mpos[z] < len(probe_ids) for z in xrange(len(msms))]):
+            for i, meas in enumerate(msms):
+                fresh = True
+                j = mpos[i]
+                while j < len(probe_ids):
+                    print("probe: "+str(j)+"; meas: "+str(i))
+                    is_success, response = send_request(probe_ids[j:j+50], [meas], **kwargs)
+                    if is_success:
+                        logger.debug("deployed meas: "+str(response['measurements'][0]))
+                        responses.append(response)
+                    else:
+                        print str(measurement[0])
+                        if "same target" in json.dumps(response) or "more than" in str(measurement[0]):
+                            logger.warning("same target fail: "+str(measurement)+"; "+str(response))
+                            mpos[i] = j  # store index so we can continue from here later
+                            if fresh:
+                                print("sleeping...")
+                                sleep(11*60)
+                            break  # break so we can move on to other doms while we wait
+                        elif "more than" in json.dumps(response) or "more than" in str(measurement[0]):
+                            logger.warning("too fast fail: "+str(measurement)+"; "+str(response))
+                            mpos[i] = j
+                            print("sleeping...")
+                            sleep(11*60)
+                            break
+                        else:
+                            logger.error("failed to launch meas "+str(meas))
+                    j += 50
+                    fresh = False
+        return True, False, responses
 
 
 def dispatch_measurement(clients, measdo, **kwargs):
@@ -283,32 +318,20 @@ def dispatch_measurement(clients, measdo, **kwargs):
     probe_ids = clients_to_probe_ids(clients)
     # print probe_ids
     is_success, slowdown, response = launch_measurement(probe_ids, measurement)
-    res.set('slow_down', slowdown)
     res.set('is_success', is_success)
     if is_success:
-        res.set('msm_ids', response['measurements'])
-        res.set('running_msm_ids', response['measurements'])
+        if type(response) is dict:
+            res.set('msm_ids', response['measurements'])
+            res.set('running_msm_ids', response['measurements'])
+        elif type(response) is list:
+            for r in response:
+                res.set('msm_ids', r['measurements'])
+                res.set('running_msm_ids', r['measurements'])
+        else:
+            logger.error("response issue: type is: "+str(type(response)))
         res.set('probe_ids', probe_ids)
     print response
-    if slowdown:
-        print("waiting for active to finish...")
-        active = 1
-        while slowdown:
-            print("...")
-            try:
-                active = get_active_count()
-            except Exception as e:
-                logger.error("failed obtaining active measurement \
-                        count..."+str(e))
-                pass
-            if active == 0:
-                slowdown = False
-                break
-            else:
-                sleep(60)
-        return dispatch_measurement(clients, measdo, **kwargs)
-    else:
-        return res
+    return res
 
 
 ##############################################################################
