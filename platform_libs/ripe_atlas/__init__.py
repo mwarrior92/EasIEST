@@ -1,15 +1,16 @@
-from ...helpers import logger, format_dirpath
-from ...helpers import top_dir
-from ...helpers import nowstr, timestr
 import json
+import time
 import ripe.atlas.cousteau as rac
-from ...cdo import Client, ClientGroup, Location
 import datetime
-from ra_mro import PingResult, DNSResult
-from ...mms.mro import PingSetResults, ResultSet
 from collections import defaultdict
 from copy import deepcopy
 from time import sleep
+from ra_mro import PingResult, DNSResult
+from ...cdo import Client, ClientGroup, Location
+from ...mms.mro import PingSetResults, ResultSet
+from ...helpers import logger, format_dirpath
+from ...helpers import top_dir
+from ...helpers import nowstr, timestr
 
 with open(top_dir+'config.json', 'r+') as f:
     config_data = json.load(f)
@@ -140,6 +141,20 @@ def format_mdo(measdo):
 ##############################################################################
 
 def get_probes(**kwargs):
+    if 'globally_spread' in kwargs:
+        total = kwargs['globally_spread']
+        del kwargs['globally_spread']
+        zones = ["North-Central", "South-Central", "South-East", "West", "North-East"]
+        piece_size = total / len(zones)
+        probes = list()
+        for zone in zones:
+            print('requesting...')
+            probes += list(rac.ProbeRequest(type='area', value=zone,
+                requested=piece_size, **kwargs))
+            print('sleeping...')
+            time.sleep(10)
+        return probes
+
     return rac.ProbeRequest(**kwargs)
 
 
@@ -149,8 +164,7 @@ def get_usable_probes(**kwargs):
     return get_probes(**kwargs)
 
 
-def get_TargetLocation_probes(tl):
-    kwargs = dict()
+def get_TargetLocation_probes(tl, **kwargs):
     if hasattr(tl, 'coordinate_circle'):
         cc = tl.get('coordinate_circle')
         kwargs['radius'] = cc['radius']
@@ -202,8 +216,8 @@ def probes_to_clients(probes):
     return clients
 
 
-def get_TargetLocation_clients(tl):
-    probes = get_TargetLocation_probes(tl)
+def get_TargetLocation_clients(tl, **kwargs):
+    probes = get_TargetLocation_probes(tl, **kwargs)
     return probes_to_clients(probes)
 
 
@@ -271,10 +285,12 @@ def launch_measurement(probe_ids, measurement, **kwargs):
         msms = deepcopy(measurement)
         responses = list()
         mpos = defaultdict(int)
+        jcounts = list()
         while any([mpos[z] < len(probe_ids) for z in xrange(len(msms))]):
             for i, meas in enumerate(msms):
                 fresh = True
                 j = mpos[i]
+                firstj = ('starting', str(datetime.datetime.now()), j)
                 while j < len(probe_ids):
                     print("probe: "+str(j)+"; meas: "+str(i))
                     is_success, response = send_request(probe_ids[j:j+50], [meas], **kwargs)
@@ -283,23 +299,34 @@ def launch_measurement(probe_ids, measurement, **kwargs):
                         responses.append(response)
                     else:
                         print str(measurement[0])
-                        if "same target" in json.dumps(response) or "more than" in str(measurement[0]):
+                        if "same target" in json.dumps(response):
                             logger.warning("same target fail: "+str(measurement)+"; "+str(response))
                             mpos[i] = j  # store index so we can continue from here later
                             if fresh:
                                 print("sleeping...")
                                 sleep(11*60)
+                            lastj = ('same target break', str(datetime.datetime.now()), j)
                             break  # break so we can move on to other doms while we wait
-                        elif "more than" in json.dumps(response) or "more than" in str(measurement[0]):
+                        elif "more than" in json.dumps(response):
                             logger.warning("too fast fail: "+str(measurement)+"; "+str(response))
                             mpos[i] = j
                             print("sleeping...")
                             sleep(11*60)
+                            lastj = ('more than break', str(datetime.datetime.now()), j)
                             break
+                        elif "daily" in json.dumps(response):
+                            logger.warning("daily limit reached: "+str(measurement)+"; "+str(response))
+                            return True, False, responses
                         else:
-                            logger.error("failed to launch meas "+str(meas))
+                            logger.error("failed to launch meas "+str(response))
+                    lastj = ('more than break', str(datetime.datetime.now()), j)
                     j += 50
                     fresh = False
+                jcounts.append((firstj, lastj))
+            '''
+            with open('jcounts.json', 'w+') as f:
+                json.dump(jcounts, f)
+            '''
         return True, False, responses
 
 
@@ -324,9 +351,11 @@ def dispatch_measurement(clients, measdo, **kwargs):
             res.set('msm_ids', response['measurements'])
             res.set('running_msm_ids', response['measurements'])
         elif type(response) is list:
+            res.set('msm_ids', list())
+            res.set('running_msm_ids', list())
             for r in response:
-                res.set('msm_ids', r['measurements'])
-                res.set('running_msm_ids', r['measurements'])
+                res.msm_ids += r['measurements']
+                res.running_msm_ids += r['measurements']
         else:
             logger.error("response issue: type is: "+str(type(response)))
         res.set('probe_ids', probe_ids)

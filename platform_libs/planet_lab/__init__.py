@@ -1,6 +1,9 @@
-import xmlrpclib
 import signal
 import sys, traceback
+try:
+    import xmlrpclib
+except ModuleNotFoundError as e:
+    import jsonrpclib as xmlrpclib
 from ...helpers import timeout_handler
 from ...helpers import mydir
 from ...helpers import top_dir
